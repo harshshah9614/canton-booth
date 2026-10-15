@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="251 295 258 298" width="258" height="298" font-family="Arial, Helvetica, sans-serif">
+<rect x="251" y="295" width="258" height="298" fill="#ffffff"/>
+<g transform="translate(285.0 267.0)">
+<path d="M 0,0 30,0 30,38 0,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="293.1" y="286.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">1.1</text>
+<g transform="translate(285.0 267.0)">
+<path d="M 0,-54 30,-54 30,-16 0,-16 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="312.7" y="232.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">1.2</text>
+<g transform="translate(285.0 267.0)">
+<path d="M 50,0 65,0 65,22.8 50,22.8 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+<path d="M 35,0 50,0 50,22.8 65,22.8 65,38 35,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="328.1" y="286.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">2.1</text>
+<g transform="translate(285.0 267.0)">
+<path d="M 35,-54 65,-54 65,-16 35,-16 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="347.7" y="232.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">2.2</text>
+<g transform="translate(285.0 267.0)">
+<path d="M 70,0 100,0 100,38 70,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="363.1" y="286.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">3.1</text>
+<g transform="translate(285.0 267.0)">
+<path d="M 70,-54 100,-54 100,-16 70,-16 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="382.7" y="232.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">3.2</text>
+<g transform="translate(285.0 267.0)">
+<path d="M 105,0 135,0 135,38 105,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="398.1" y="286.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">4.1</text>
+<g transform="translate(285.0 267.0)">
+<path d="M 105,-54 135,-54 135,-16 105,-16 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="417.7" y="232.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">4.2</text>
+<g transform="translate(285.0 267.0)">
+<path d="M 140,0 170,0 170,38 140,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="433.1" y="286.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">5.1</text>
+<g transform="translate(285.0 267.0)">
+<path d="M 140,-54 170,-54 170,-16 140,-16 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="452.7" y="232.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">5.2</text>
+<g transform="translate(331.0 118.0)">
+<path d="M 0,0 15,0 15,38 0,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+<path d="M 15,0 30,0 30,38 15,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="339.1" y="137.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">6.1</text>
+<g transform="translate(331.0 118.0)">
+<path d="M 35,0 65,0 65,19 35,19 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="377.5" y="127.5" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">7.1</text>
+<g transform="translate(331.0 118.0)">
+<path d="M 70,0 100,0 100,38 70,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="409.1" y="137.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">8.1</text>
+<g transform="translate(331.0 118.0)">
+<path d="M 105,0 135,0 135,19 105,19 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="447.5" y="127.5" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">4.0</text>
+<g transform="translate(339.0 92.0)">
+<path d="M 0,0 30,0 30,19 0,19 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="350.5" y="101.5" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">6.0</text>
+<g transform="translate(339.0 92.0)">
+<path d="M 70,0 100,0 100,19 70,19 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="420.5" y="101.5" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">8.0</text>
+<g transform="translate(339.0 92.0)">
+<path d="M 105,0 114,0 114,19 105,19 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+<path d="M 114,0 135,0 135,19 114,19 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="455.5" y="101.5" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">8.0</text>
+<g transform="translate(339.0 92.0)">
+<path d="M 140,0 170,0 170,19 140,19 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="490.5" y="101.5" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">8.0</text>
+<g transform="translate(302.0 260.0)">
+<path d="M 0,0 15,0 15,3.8000000000000003 0,3.8000000000000003 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="310.5" y="257.3" font-size="7.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">1.1Y</text>
+<g transform="translate(302.0 260.0)">
+<path d="M 35,0 50,0 50,3.8000000000000003 35,3.8000000000000003 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="345.5" y="257.3" font-size="7.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">2.1Y</text>
+<g transform="translate(302.0 260.0)">
+<path d="M 70,0 85,0 85,3.8000000000000003 70,3.8000000000000003 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="380.5" y="257.3" font-size="7.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">3.1Y</text>
+<g transform="translate(302.0 260.0)">
+<path d="M 105,0 120,0 120,3.8000000000000003 105,3.8000000000000003 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="415.5" y="257.3" font-size="7.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">4.1Y</text>
+<g transform="translate(302.0 260.0)">
+<path d="M 140,0 155,0 155,3.8000000000000003 140,3.8000000000000003 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="450.5" y="257.3" font-size="7.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">5.1Y</text>
+<g transform="translate(331.0 160.0)">
+<path d="M 0,0 15,0 15,3.8000000000000003 0,3.8000000000000003 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="335.3" y="168.7" font-size="7.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">1.1Y</text>
+<g transform="translate(331.0 160.0)">
+<path d="M 20,0 50,0 50,3.8000000000000003 20,3.8000000000000003 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="362.8" y="168.7" font-size="7.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">2.1Y</text>
+<g transform="translate(331.0 160.0)">
+<path d="M 70,0 85,0 85,3.8000000000000003 70,3.8000000000000003 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="405.3" y="168.7" font-size="7.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">3.1Y</text>
+<g transform="translate(331.0 160.0)">
+<path d="M 135,0 150,0 150,3.8000000000000003 135,3.8000000000000003 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="470.3" y="168.7" font-size="7.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">5.1Y</text>
+<g transform="translate(45.0 267.0)">
+<path d="M 0,0 30,0 30,38 0,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="53.1" y="286.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">17.1</text>
+<g transform="translate(45.0 267.0)">
+<path d="M 0,-54 30,-54 30,-16 0,-16 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="72.7" y="232.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">17.2</text>
+<g transform="translate(45.0 267.0)">
+<path d="M 35,0 65,0 65,38 35,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="88.1" y="286.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">18.1</text>
+<g transform="translate(45.0 267.0)">
+<path d="M 35,-54 65,-54 65,-16 35,-16 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="107.7" y="232.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">18.2</text>
+<g transform="translate(45.0 267.0)">
+<path d="M 70,0 100,0 100,38 70,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="123.1" y="286.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">19.1</text>
+<g transform="translate(45.0 267.0)">
+<path d="M 70,-54 100,-54 100,-16 70,-16 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="142.7" y="232.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">19.2</text>
+<g transform="translate(45.0 267.0)">
+<path d="M 120,0 135,0 135,26.599999999999998 120,26.599999999999998 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+<path d="M 105,0 120,0 120,26.599999999999998 135,26.599999999999998 135,38 105,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="158.1" y="286.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">20.1</text>
+<g transform="translate(45.0 267.0)">
+<path d="M 105,-54 135,-54 135,-16 105,-16 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="177.7" y="232.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">20.2</text>
+<g transform="translate(213.0 228.0)">
+<path d="M 0,0 18,0 18,22.8 0,22.8 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="217.9" y="239.4" font-size="8.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">21.2</text>
+<g transform="translate(345.0 515.0)">
+<path d="M 0,0 30,0 30,38 0,38 z" transform="skewX(-20)" fill="#ea580c" stroke="#7c2d12" stroke-width="1.2"/>
+</g><text x="353.1" y="534.0" font-size="10.0" font-weight="700" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">14.1</text>
+<g transform="translate(345.0 515.0)">
+<path d="M 0,-50 30,-50 30,-12 0,-12 z" transform="skewX(-20)" fill="#ea580c" stroke="#7c2d12" stroke-width="1.2"/>
+</g><text x="371.3" y="484.0" font-size="10.0" font-weight="700" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">14.2</text>
+<g transform="translate(345.0 515.0)">
+<path d="M 0,-100 30,-100 30,-62 0,-62 z" transform="skewX(-20)" fill="#ea580c" stroke="#7c2d12" stroke-width="1.2"/>
+</g><text x="389.5" y="434.0" font-size="10.0" font-weight="700" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">14.3</text>
+<g transform="translate(345.0 515.0)">
+<path d="M 0,-150 30,-150 30,-112 0,-112 z" transform="skewX(-20)" fill="#ea580c" stroke="#7c2d12" stroke-width="1.2"/>
+</g><text x="407.7" y="384.0" font-size="10.0" font-weight="700" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">14.4</text>
+<g transform="translate(345.0 515.0)">
+<path d="M 35,0 65,0 65,38 35,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="388.1" y="534.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">15.1</text>
+<g transform="translate(345.0 515.0)">
+<path d="M 50,-50 65,-50 65,-12 35,-12 35,-31 50,-31 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+<path d="M 35,-50 50,-50 50,-31 35,-31 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="406.3" y="484.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">15.2</text>
+<g transform="translate(345.0 515.0)">
+<path d="M 35,-100 65,-100 65,-62 35,-62 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="424.5" y="434.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">15.3</text>
+<g transform="translate(345.0 515.0)">
+<path d="M 35,-150 65,-150 65,-112 35,-112 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="442.7" y="384.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">15.4</text>
+<g transform="translate(345.0 515.0)">
+<path d="M 83,-50 113,-50 113,-12 83,-12 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="454.3" y="484.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">16.2</text>
+<g transform="translate(345.0 515.0)">
+<path d="M 83,-100 113,-100 113,-62 83,-62 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="472.5" y="434.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">16.3</text>
+<g transform="translate(345.0 515.0)">
+<path d="M 83,-150 113,-150 113,-112 83,-112 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="490.7" y="384.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">16.4</text>
+<g transform="translate(530.0 267.0)">
+<path d="M 0,0 30,0 30,38 0,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="538.1" y="286.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">9.1</text>
+<g transform="translate(530.0 267.0)">
+<path d="M 0,-42 30,-42 30,-4 0,-4 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="553.4" y="244.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">9.2</text>
+<g transform="translate(530.0 267.0)">
+<path d="M 0,-84 30,-84 30,-46 0,-46 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="568.7" y="202.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">9.3</text>
+<g transform="translate(530.0 267.0)">
+<path d="M 35,0 65,0 65,38 35,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="573.1" y="286.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">10.1</text>
+<g transform="translate(530.0 267.0)">
+<path d="M 35,-42 65,-42 65,-4 35,-4 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="588.4" y="244.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">10.2</text>
+<g transform="translate(530.0 267.0)">
+<path d="M 35,-84 65,-84 65,-46 35,-46 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="603.7" y="202.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">10.3</text>
+<g transform="translate(530.0 267.0)">
+<path d="M 70,0 100,0 100,38 70,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="608.1" y="286.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">11.1</text>
+<g transform="translate(530.0 267.0)">
+<path d="M 70,-42 100,-42 100,-4 70,-4 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="623.4" y="244.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">11.2</text>
+<g transform="translate(530.0 267.0)">
+<path d="M 70,-84 100,-84 100,-46 70,-46 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="638.7" y="202.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">11.3</text>
+<g transform="translate(614.0 123.0)">
+<path d="M 0,0 30,0 30,38 0,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="622.1" y="142.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">12.1</text>
+<g transform="translate(614.0 123.0)">
+<path d="M 0,-42 30,-42 30,-4 0,-4 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="637.4" y="100.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">12.2</text>
+<g transform="translate(614.0 123.0)">
+<path d="M 35,0 65,0 65,38 35,38 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="657.1" y="142.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">13.1</text>
+<g transform="translate(614.0 123.0)">
+<path d="M 35,-42 65,-42 65,-4 35,-4 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="672.4" y="100.0" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">13.2</text>
+<g transform="translate(605.0 49.0)">
+<path d="M 0,0 32,0 32,23 0,23 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="616.8" y="60.5" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">9.0</text>
+<g transform="translate(605.0 49.0)">
+<path d="M 35,0 67,0 67,23 35,23 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="651.8" y="60.5" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">12.0</text>
+<g transform="translate(605.0 49.0)">
+<path d="M 70,0 102,0 102,23 70,23 z" transform="skewX(-20)" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.6"/>
+</g><text x="686.8" y="60.5" font-size="10.0" font-weight="400" fill="#64748b" text-anchor="middle" dominant-baseline="middle">13.0</text>
+<text x="390.1" y="317.0" font-size="11" fill="#94a3b8" text-anchor="middle" font-weight="700">Area A</text>
+<text x="611.6" y="317.0" font-size="11" fill="#94a3b8" text-anchor="middle" font-weight="700">Area B</text>
+<text x="421.9" y="565.0" font-size="11" fill="#94a3b8" text-anchor="middle" font-weight="700">Area C</text>
+<text x="131.1" y="317.0" font-size="11" fill="#94a3b8" text-anchor="middle" font-weight="700">Area D</text>
+<rect x="251" y="295" width="258" height="46" fill="#ffffff" opacity="0.92"/>
+<text x="259" y="317" font-size="20" font-weight="800" fill="#ea580c">Hall 14</text>
+<text x="259" y="333" font-size="10" fill="#475569">Floors 14.1, 14.2, 14.3, 14.4</text>
+<rect x="251.5" y="295.5" width="257" height="297" fill="none" stroke="#cbd5e1"/>
+</svg>
