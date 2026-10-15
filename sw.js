@@ -1,7 +1,7 @@
 // Offline-first service worker.
 // - App shell + public assets (styles, libraries, official hall maps): cached on install, refreshed in the background.
 // - Dashboard tabs (d/*.html): private; the app downloads them from Google Drive after sign-in into the DASH cache.
-const CACHE = 'canton-booth-v2.1.1';
+const CACHE = 'canton-booth-v2.1.2';
 const DASH = 'canton-dash';
 const SHELL = ['./', './index.html', './app.js', './config.js', './manifest.webmanifest', './assets.json',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png'];

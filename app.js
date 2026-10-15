@@ -2,7 +2,7 @@
 /* Canton booth app - offline-first PWA. Everything is saved on the phone first (IndexedDB), then uploaded to the
    team's Google Drive (Apps Script backend in config.js) whenever there is internet. */
 
-const VERSION = '2.1.1';
+const VERSION = '2.1.2';
 const API = ((window.BOOTH_CONFIG || {}).api || '').trim();
 const OPTIMIZE_MAX = 2560;           // longest side for "Optimized" uploads
 const OPTIMIZE_OVER = 1.5 * 1024 * 1024;
@@ -197,6 +197,9 @@ function visitPayload(v) {
   return Object.fromEntries(keys.map(k => [k, v[k] == null ? '' : v[k]]));
 }
 
+// only a bad file or missing name can never succeed; busy/lock/server errors keep retrying every minute
+const permanent = e => /not a photo|larger than 30 MB|Empty photo|required|id missing|missing on this phone/i.test(e.message || '');
+
 async function sync(manual) {
   if (S.syncing || !S.pass) return;
   if (!navigator.onLine && !manual) { renderStatus(); return; }
@@ -208,12 +211,12 @@ async function sync(manual) {
     }
     for (const v of (await DB.all('visits')).filter(x => x.sync === 'pending' || (x.sync === 'error' && (x.attempts || 0) < 5))) {
       try {
-        const r = await api('visit', { visit: visitPayload(v) });
+        const r = await api('visit', { visit: visitPayload(v) }, 120000);
         Object.assign(v, { sync: 'synced', folder: r.folder, error: '' });
         S.netDown = false; uploaded++;
       } catch (e) {
         if (e.net || e.auth || e.config) throw e;
-        Object.assign(v, { sync: 'error', error: e.message, attempts: (v.attempts || 0) + 1 });
+        Object.assign(v, { sync: 'error', error: e.message, attempts: (v.attempts || 0) + (permanent(e) ? 1 : 0) });
       }
       const now = await DB.get('visits', v.client_id);
       if (now && now.updated_local === v.updated_local) await DB.put('visits', v);   // edited while uploading: keep the newer copy pending
@@ -236,7 +239,7 @@ async function sync(manual) {
         uploaded++;
       } catch (e) {
         if (e.net || e.auth || e.config) throw e;
-        Object.assign(p, { sync: 'error', error: e.message, attempts: (p.attempts || 0) + 1 });
+        Object.assign(p, { sync: 'error', error: e.message, attempts: (p.attempts || 0) + (permanent(e) ? 1 : 0) });
       }
       await DB.put('photos', p);
       await loadLocal(); renderStatus();
