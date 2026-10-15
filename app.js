@@ -2,7 +2,7 @@
 /* Canton booth app - offline-first PWA. Everything is saved on the phone first (IndexedDB), then uploaded to the
    team's Google Drive (Apps Script backend in config.js) whenever there is internet. */
 
-const VERSION = '2.1.0';
+const VERSION = '2.1.1';
 const API = ((window.BOOTH_CONFIG || {}).api || '').trim();
 const OPTIMIZE_MAX = 2560;           // longest side for "Optimized" uploads
 const OPTIMIZE_OVER = 1.5 * 1024 * 1024;
@@ -219,7 +219,10 @@ async function sync(manual) {
       if (now && now.updated_local === v.updated_local) await DB.put('visits', v);   // edited while uploading: keep the newer copy pending
     }
     const visits = Object.fromEntries((await DB.all('visits')).map(v => [v.client_id, v]));
-    for (const p of (await DB.all('photos')).filter(x => x.sync === 'pending' || (x.sync === 'error' && (x.attempts || 0) < 5))) {
+    // smallest first, so one huge original on a weak connection cannot hold up the rest
+    const queue = (await DB.all('photos')).filter(x => x.sync === 'pending' || (x.sync === 'error' && (x.attempts || 0) < 5))
+      .sort((a, b) => (a.size || 0) - (b.size || 0));
+    for (const p of queue) {
       const v = visits[p.client_id];
       if (!v || v.sync !== 'synced') continue;              // its visit row must exist first
       try {
@@ -227,7 +230,8 @@ async function sync(manual) {
         if (!blob) throw new Error('Photo file missing on this phone');
         const data = await blobToBase64(blob);
         const r = await api('photo', { photo: { photo_id: p.photo_id, client_id: p.client_id, kind: p.kind, name: p.name, mime: p.mime, data,
-          supplier_id: v.supplier_id, supplier_name: v.supplier_name, phase: v.phase, booth: v.booth, recorded_by: v.recorded_by } }, 180000);
+          supplier_id: v.supplier_id, supplier_name: v.supplier_name, phase: v.phase, booth: v.booth, recorded_by: v.recorded_by } },
+          180000 + Math.round(blob.size / 1024) * 40);   // allow ~25 KB/s on slow roaming
         Object.assign(p, { sync: 'synced', url: r.url, error: '' });
         uploaded++;
       } catch (e) {
