@@ -2,7 +2,7 @@
 /* Canton booth app - offline-first PWA. Everything is saved on the phone first (IndexedDB), then uploaded to the
    team's Google Drive (Apps Script backend in config.js) whenever there is internet. */
 
-const VERSION = '2.1.2';
+const VERSION = '2.2.0';
 const API = ((window.BOOTH_CONFIG || {}).api || '').trim();
 const OPTIMIZE_MAX = 2560;           // longest side for "Optimized" uploads
 const OPTIMIZE_OVER = 1.5 * 1024 * 1024;
@@ -42,6 +42,8 @@ const ICON = {
   expand: ['M15 3h6v6', 'M9 21H3v-6', 'M21 3l-7 7', 'M3 21l7-7'], booth: ['M3 21V8l9-5 9 5v13', 'M9 21v-6h6v6'],
   sync: ['M21 12a9 9 0 1 1-2.6-6.4L21 8', 'M21 3v5h-5'],
   grid: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'],
+  qr: ['M3 3h6v6H3z', 'M15 3h6v6h-6z', 'M3 15h6v6H3z', 'M15 15h2v2h-2z', 'M19 15h2', 'M15 19h2', 'M19 19h2v2'],
+  image: ['M3 5h18v14H3z', 'M8 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z', 'M21 16l-5-5L5 19'],
 };
 const DASH_PAGES = [
   ['cc.html', 'Command Centre', 'Shortlist by walking order, venue maps, routes, Alibaba / 365 summary'],
@@ -602,6 +604,7 @@ function renderForm() {
           onclick: () => { setVal('rating', Number(v.rating) === n ? '' : String(n)); renderForm(); } }, '\u2605')))),
       h('div', { class: 'card' },
         h('div', { class: 'section-title' }, 'Contact'),
+        h('button', { class: 'btn ghost qr-btn', onclick: openScanner }, svg(ICON.qr, 20), 'Scan QR code (WeChat / business card)'),
         field('Who we met', 'contact_name', { placeholder: 'Name and role' }),
         h('div', { class: 'grid2' }, h('div', {}, field('WeChat', 'wechat')), h('div', {}, field('Phone', 'phone', { type: 'tel', inputmode: 'tel' }))),
         field('Email', 'email', { type: 'email', inputmode: 'email', autocapitalize: 'off' })),
@@ -661,6 +664,10 @@ function photoPicker(kind, label, icon) {
 async function addPhotos(input, kind) {
   const files = [...input.files];
   input.value = '';
+  const added = await addFiles(files, kind);
+  if (added) toast(`${added} photo${added > 1 ? 's' : ''} added - tap Save to upload`);
+}
+async function addFiles(files, kind) {
   let added = 0;
   for (const file of files) {
     try {
@@ -676,8 +683,9 @@ async function addPhotos(input, kind) {
   }
   if (added) {
     store.setJson('draft_' + S.form.client_id, S.form.values);
-    renderForm(); toast(`${added} photo${added > 1 ? 's' : ''} added - tap Save to upload`);
+    renderForm();
   }
+  return added;
 }
 function thumb(p) {
   const label = { card: 'Card', product: 'Product', booth: 'Booth', other: 'Other' }[p.kind] || 'Photo';
@@ -697,6 +705,274 @@ async function removePhoto(p) {
   await dropPhoto(p.photo_id);
   S.form.photos = S.form.photos.filter(x => x.photo_id !== p.photo_id);
   renderForm();
+}
+
+// ---------- QR scanner (WeChat / business cards): decodes on the phone, works offline ----------
+let scanSession = null;
+let qrDetector;
+function loadJsQR() {
+  if (window.jsQR) return Promise.resolve(window.jsQR);
+  return new Promise((res, rej) => {
+    const s = h('script', { src: 'jsqr.js' });
+    s.onload = () => (window.jsQR ? res(window.jsQR) : rej(new Error('QR reader failed to load')));
+    s.onerror = () => rej(new Error('QR reader not on this phone yet - open the app once with internet'));
+    document.head.append(s);
+  });
+}
+function nativeDetector() {
+  if (qrDetector !== undefined) return qrDetector;
+  qrDetector = null;
+  try { if ('BarcodeDetector' in window) qrDetector = new BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { qrDetector = null; }
+  return qrDetector;
+}
+async function decodeCanvas(c, thorough) {
+  const bd = nativeDetector();
+  if (bd) {
+    try { const r = await bd.detect(c); if (r[0] && r[0].rawValue) return r[0].rawValue; } catch (e) { /* use jsQR */ }
+    if (!thorough) return '';
+  }
+  const jsQR = await loadJsQR();
+  const d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height);
+  const r = jsQR(d.data, d.width, d.height, { inversionAttempts: thorough ? 'attemptBoth' : 'dontInvert' });
+  return r ? r.data : '';
+}
+async function decodeImageFile(file) {
+  const img = await decodable(file);
+  if (!img) return '';
+  try {
+    for (const max of [1200, 2000, 700]) {
+      const sc = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = h('canvas', { width: Math.round(img.naturalWidth * sc), height: Math.round(img.naturalHeight * sc) });
+      c.getContext('2d', { willReadFrequently: true }).drawImage(img, 0, 0, c.width, c.height);
+      const t = await decodeCanvas(c, true);
+      if (t) return t;
+    }
+    return '';
+  } finally { URL.revokeObjectURL(img.src); }
+}
+
+function openScanner() {
+  if (scanSession) return;
+  loadJsQR().catch(() => {});
+  const video = h('video', { playsinline: '', muted: '', autoplay: '' });
+  video.muted = true;
+  const msg = h('div', { class: 'scan-msg' }, 'Starting camera\u2026');
+  const pickCam = h('input', { type: 'file', accept: 'image/*', capture: 'environment', class: 'hidden', onchange: e => scanFiles(e.target) });
+  const pickLib = h('input', { type: 'file', accept: 'image/*,.heic,.heif', class: 'hidden', onchange: e => scanFiles(e.target) });
+  const box = h('div', { class: 'scan', role: 'dialog', 'aria-label': 'Scan QR code' },
+    video, h('div', { class: 'scan-frame' }), msg,
+    h('div', { class: 'scan-bar' },
+      h('button', { class: 'btn', onclick: () => pickCam.click() }, svg(ICON.camera, 18), 'Take photo'),
+      h('button', { class: 'btn ghost', onclick: () => pickLib.click() }, svg(ICON.image, 18), 'From photos'),
+      h('button', { class: 'btn ghost', onclick: closeScanner }, 'Cancel')),
+    pickCam, pickLib);
+  document.body.append(box);
+  scanSession = { box, video, msg, stream: null, timer: 0, busy: false, done: false, denied: false };
+  startCamera(scanSession);
+}
+async function startCamera(s) {
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no camera');
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: false,
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+    if (scanSession !== s || s.done) { stream.getTracks().forEach(t => t.stop()); return; }
+    s.stream = stream; s.video.srcObject = stream;
+    await s.video.play().catch(() => {});
+    s.msg.textContent = 'Point the camera at the QR code';
+    s.box.classList.remove('nocam');
+    scanLoop(s);
+  } catch (e) {
+    s.denied = e && e.name === 'NotAllowedError';
+    s.msg.textContent = 'Camera not available here. Tap Take photo to photograph the QR code, or pick a screenshot from your photos.';
+    s.box.classList.add('nocam');
+  }
+}
+function scanLoop(s) {
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  const tick = async () => {
+    if (scanSession !== s || s.done || !s.stream) return;
+    const v = s.video;
+    if (!s.busy && v.readyState >= 2 && v.videoWidth) {
+      s.busy = true;
+      try {
+        const sc = Math.min(1, 900 / Math.max(v.videoWidth, v.videoHeight));
+        c.width = Math.round(v.videoWidth * sc); c.height = Math.round(v.videoHeight * sc);
+        ctx.drawImage(v, 0, 0, c.width, c.height);
+        const text = await decodeCanvas(c, false);
+        if (text && scanSession === s && !s.done) {
+          const full = h('canvas', { width: v.videoWidth, height: v.videoHeight });
+          full.getContext('2d').drawImage(v, 0, 0);
+          const shot = await new Promise(r => full.toBlob(r, 'image/jpeg', 0.92));
+          return gotCode(text, shot);
+        }
+      } catch (e) { /* keep scanning */ } finally { s.busy = false; }
+    }
+    s.timer = setTimeout(tick, 180);
+  };
+  tick();
+}
+function stopCamera(s) {
+  clearTimeout(s.timer);
+  if (s.stream) s.stream.getTracks().forEach(t => t.stop());
+  s.stream = null;
+}
+function closeScanner() {
+  const s = scanSession;
+  if (!s) return;
+  scanSession = null; s.done = true;
+  stopCamera(s);
+  s.box.remove();
+}
+async function scanFiles(input) {
+  const file = input.files && input.files[0];
+  input.value = '';
+  const s = scanSession;
+  if (!file || !s) return;
+  s.msg.textContent = 'Reading the QR code\u2026';
+  let text = '';
+  try { text = await decodeImageFile(file); } catch (e) { text = ''; s.msg.textContent = e.message; }
+  if (scanSession !== s) return;
+  if (!text) { s.msg.textContent = 'No QR code found in that photo. Fill the frame with the QR code, keep it sharp, and try again.'; return; }
+  gotCode(text, file);
+}
+async function gotCode(text, blob) {
+  if (navigator.vibrate) navigator.vibrate(60);
+  closeScanner();
+  await applyQr(text, blob);
+}
+document.addEventListener('visibilitychange', () => {
+  const s = scanSession;
+  if (!s) return;
+  if (document.visibilityState === 'hidden') stopCamera(s);          // free the camera for the phone's own camera app
+  else if (!s.stream && !s.denied && !s.done) startCamera(s);
+});
+
+const unesc = x => x.replace(/\\n/gi, ' ').replace(/\\([,;:\\])/g, '$1').trim();
+const hasCJK = x => /[\u3400-\u9fff]/.test(x);
+const isWeChat = u => /^(weixin:\/\/|https?:\/\/([a-z0-9-]+\.)*(wechat\.com|weixin\.qq\.com|wx\.qq\.com)(\/|$))/i.test(u);
+function qpDecode(x) {
+  const bytes = [];
+  for (let i = 0; i < x.length; i++) {
+    if (x[i] === '=' && /^[0-9A-F]{2}$/i.test(x.substr(i + 1, 2))) { bytes.push(parseInt(x.substr(i + 1, 2), 16)); i += 2; }
+    else bytes.push(x.charCodeAt(i) & 0xff);
+  }
+  try { return new TextDecoder('utf-8').decode(new Uint8Array(bytes)); } catch (e) { return x; }
+}
+function parseVcard(text, out) {
+  let body = text.replace(/\r\n?/g, '\n');
+  if (/QUOTED-PRINTABLE/i.test(body)) body = body.replace(/=\n/g, '');
+  let n = '', title = '';
+  for (const line of body.replace(/\n[ \t]/g, '').split('\n')) {
+    const i = line.indexOf(':');
+    if (i < 0) continue;
+    const head = line.slice(0, i), key = head.split(';')[0].replace(/^item\d+\./i, '').toUpperCase();
+    let raw = line.slice(i + 1);
+    if (/ENCODING=QUOTED-PRINTABLE/i.test(head)) raw = qpDecode(raw);
+    const val = unesc(raw);
+    if (!val) continue;
+    if (key === 'FN') out.name = val;
+    else if (key === 'N') n = raw;
+    else if (key === 'ORG') out.org = raw.split(';').map(unesc).filter(Boolean).join(' - ');
+    else if (key === 'TITLE') title = val;
+    else if (key === 'TEL') out.phone.push(val.replace(/^tel:/i, ''));
+    else if (key === 'EMAIL') out.email.push(val.replace(/^mailto:/i, ''));
+    else if (key === 'URL') out.links.push(val);
+    else if (/^X-(WECHAT|WEIXIN|WX)/.test(key) || (key === 'IMPP' && /wechat|weixin/i.test(line))) out.wechat = val.replace(/^(x-apple:|weixin:|wechat:)/i, '');
+    else if (key === 'ADR') out.extra.push('Address: ' + raw.split(';').map(unesc).filter(Boolean).join(', '));
+    else if (key === 'NOTE') out.extra.push('Note: ' + val);
+  }
+  if (!out.name && n) {
+    const [fam = '', giv = ''] = n.split(';').map(unesc);
+    out.name = hasCJK(fam + giv) ? fam + giv : [giv, fam].filter(Boolean).join(' ');
+  }
+  if (title) out.name = [out.name, title].filter(Boolean).join(', ');
+}
+function parseMecard(text, out) {
+  const body = text.replace(/^mecard:/i, '');
+  const parts = [];
+  let cur = '';
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (ch === '\\' && i + 1 < body.length) { cur += body[++i]; continue; }
+    if (ch === ';') { parts.push(cur); cur = ''; continue; }
+    cur += ch;
+  }
+  if (cur) parts.push(cur);
+  for (const p of parts) {
+    const i = p.indexOf(':');
+    if (i < 0) continue;
+    const k = p.slice(0, i).toUpperCase(), v = p.slice(i + 1).trim();
+    if (!v) continue;
+    if (k === 'N') { const [a = '', b = ''] = v.split(',').map(x => x.trim()); out.name = b ? (hasCJK(v) ? a + b : b + ' ' + a) : a; }
+    else if (k === 'ORG') out.org = v;
+    else if (k === 'TEL' || k === 'TEL-AV') out.phone.push(v);
+    else if (k === 'EMAIL') out.email.push(v);
+    else if (k === 'URL') out.links.push(v);
+    else if (k === 'ADR') out.extra.push('Address: ' + v);
+    else if (k === 'NOTE' || k === 'MEMORY') out.extra.push('Note: ' + v);
+  }
+}
+function parseQr(raw) {
+  const text = String(raw || '').trim();
+  const out = { type: 'Text', name: '', org: '', wechat: '', phone: [], email: [], links: [], extra: [] };
+  if (/^begin:vcard/i.test(text)) { out.type = 'Business card (vCard)'; parseVcard(text, out); }
+  else if (/^mecard:/i.test(text)) { out.type = 'Business card (MeCard)'; parseMecard(text, out); }
+  else if (isWeChat(text)) { out.type = 'WeChat contact'; out.wechat = text; }
+  else if (/^tel:/i.test(text)) { out.type = 'Phone number'; out.phone.push(text.slice(4)); }
+  else if (/^mailto:/i.test(text)) { out.type = 'Email'; out.email.push(decodeURIComponent(text.slice(7).split('?')[0])); }
+  else if (/^(https?:\/\/)?(wa\.me|api\.whatsapp\.com)\//i.test(text)) {
+    out.type = 'WhatsApp';
+    const m = text.match(/(?:wa\.me\/|phone=)\+?(\d{6,})/);
+    if (m) out.phone.push('+' + m[1] + ' (WhatsApp)'); else out.links.push(text);
+  } else if (/^https?:\/\//i.test(text)) { out.type = /alibaba\.com|1688\.com/i.test(text) ? 'Alibaba / 1688 page' : 'Web link'; out.links.push(text); }
+  else {
+    const em = text.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g);
+    if (em) out.email.push(...em);
+    const wx = text.match(/(?:wechat|weixin|wx|\u5fae\u4fe1)\s*(?:id|\u53f7)?\s*[:\uff1a]\s*([A-Za-z][\w-]{4,})/i);
+    if (wx) out.wechat = wx[1];
+    const ph = text.match(/\+?\d[\d\s()-]{7,}\d/g);
+    if (ph) out.phone.push(...ph.map(x => x.trim()));
+  }
+  if (!out.wechat) {
+    const l = out.links.find(isWeChat);
+    if (l) { out.wechat = l; out.links = out.links.filter(x => x !== l); }
+  }
+  return out;
+}
+async function applyQr(text, blob) {
+  if (!S.form) return;
+  const r = parseQr(text);
+  const filled = [];
+  const merge = (k, val, label) => {
+    val = String(val || '').trim();
+    if (!val) return;
+    const cur = String(S.form.values[k] || '').trim();
+    if (!cur) { setVal(k, val); filled.push(label); }
+    else if (!cur.includes(val)) { setVal(k, cur + ' | ' + val); filled.push(label + ' (added)'); }
+  };
+  merge('contact_name', r.name, 'Who we met');
+  merge('wechat', r.wechat, 'WeChat');
+  merge('phone', [...new Set(r.phone)].join(', '), 'Phone');
+  merge('email', [...new Set(r.email)].join(', '), 'Email');
+  if (!S.form.sup && r.org && !String(S.form.values.new_name || '').trim()) { setVal('new_name', r.org); filled.push('Company name'); }
+  const lines = [`QR scanned ${stamp()} (${r.type}): ${String(text).trim().replace(/\s*\r?\n\s*/g, ' | ').slice(0, 2000)}`];
+  if (r.org && S.form.sup) lines.push('Company on card: ' + r.org);
+  lines.push(...r.extra, ...r.links.map(l => 'Link: ' + l));
+  const notes = String(S.form.values.notes || '').trim();
+  setVal('notes', (notes ? notes + '\n' : '') + lines.join('\n'));
+  filled.push('Notes');
+  let saved = false;
+  if (blob) {
+    const ext = /png/i.test(blob.type) ? 'png' : /heic|heif/i.test(blob.type) ? 'heic' : 'jpg';
+    const file = new File([blob], `qr_code_${Date.now()}.${ext}`, { type: blob.type || 'image/jpeg' });
+    saved = (await addFiles([file], 'card')) > 0;
+  }
+  renderForm();
+  const tip = r.wechat && /^(weixin:|https?:)/i.test(r.wechat)
+    ? '\n\nWeChat QR codes open only inside WeChat. To add this contact later: WeChat \u2192 + \u2192 Scan \u2192 photo icon \u2192 pick the saved QR photo.' : '';
+  dialog('QR code scanned', `${r.type}\nFilled: ${filled.join(', ')}${saved ? '\nThe QR photo is saved with this note.' : ''}${tip}\n\nCheck the fields, then tap Save notes.`,
+    [{ label: 'OK', value: true }]);
 }
 
 function openEditor() {

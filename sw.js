@@ -1,16 +1,17 @@
 // Offline-first service worker.
 // - App shell + public assets (styles, libraries, official hall maps): cached on install, refreshed in the background.
 // - Dashboard tabs (d/*.html): private; the app downloads them from Google Drive after sign-in into the DASH cache.
-const CACHE = 'canton-booth-v2.1.2';
+const CACHE = 'canton-booth-v2.2.0';
 const DASH = 'canton-dash';
-const SHELL = ['./', './index.html', './app.js', './config.js', './manifest.webmanifest', './assets.json',
+const SHELL = ['./', './index.html', './app.js', './config.js', './manifest.webmanifest', './assets.json', './jsqr.js',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
+  // cache:'reload' skips the browser's 10-minute HTTP cache, so an update never mixes old and new files
   e.waitUntil(caches.open(CACHE).then(async c => {
-    await c.addAll(SHELL);
+    await c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })));
     const list = await (await fetch('./assets.json', { cache: 'no-store' })).json();
-    await Promise.allSettled(list.map(p => c.add('./' + p)));   // one missing map must not disable offline mode
+    await Promise.allSettled(list.map(p => c.add(new Request('./' + p, { cache: 'reload' }))));   // one missing map must not disable offline mode
   }).then(() => self.skipWaiting()));
 });
 
@@ -33,10 +34,11 @@ self.addEventListener('fetch', e => {
       .then(hit => hit || new Response(MISSING, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })));
     return;
   }
-  const key = e.request.mode === 'navigate' ? './index.html' : e.request;
+  const nav = e.request.mode === 'navigate';
+  const key = nav ? './index.html' : e.request;
   e.respondWith(caches.open(CACHE).then(async cache => {
     const hit = await cache.match(key, { ignoreSearch: true });
-    const fresh = fetch(e.request).then(res => {
+    const fresh = fetch(new Request(nav ? './index.html' : e.request.url, { cache: 'no-cache' })).then(res => {
       if (res.ok) cache.put(key, res.clone());
       return res;
     }).catch(() => hit);
