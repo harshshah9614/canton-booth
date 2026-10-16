@@ -1,17 +1,29 @@
 // Offline-first service worker.
 // - App shell + public assets (styles, libraries, official hall maps): cached on install, refreshed in the background.
 // - Dashboard tabs (d/*.html): private; the app downloads them from Google Drive after sign-in into the DASH cache.
-const CACHE = 'canton-booth-v2.2.1';
+const CACHE = 'canton-booth-v2.2.2';
 const DASH = 'canton-dash';
 const SHELL = ['./', './index.html', './app.js', './config.js', './manifest.webmanifest', './assets.json', './jsqr.js',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
+// one dropped request on a weak connection must not abort the whole update: each file gets 3 tries
+async function store(c, url) {
+  for (let i = 0; i < 3; i++) {
+    try {
+      const res = await fetch(new Request(url, { cache: 'reload' }));   // skips the browser's 10-minute HTTP cache
+      if (res.ok) { await c.put(url, res); return true; }
+    } catch (err) { /* retry */ }
+    await new Promise(r => setTimeout(r, 700 * (i + 1)));
+  }
+  return false;
+}
+
 self.addEventListener('install', e => {
-  // cache:'reload' skips the browser's 10-minute HTTP cache, so an update never mixes old and new files
   e.waitUntil(caches.open(CACHE).then(async c => {
-    await c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })));
+    const ok = await Promise.all(SHELL.map(u => store(c, u)));
+    if (ok.includes(false)) throw new Error('app files not downloaded - the update retries next time the app opens');
     const list = await (await fetch('./assets.json', { cache: 'no-store' })).json();
-    await Promise.allSettled(list.map(p => c.add(new Request('./' + p, { cache: 'reload' }))));   // one missing map must not disable offline mode
+    await Promise.all(list.map(p => store(c, './' + p)));   // a missing map must not disable offline mode
   }).then(() => self.skipWaiting()));
 });
 

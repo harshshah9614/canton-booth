@@ -2,7 +2,7 @@
 /* Canton booth app - offline-first PWA. Everything is saved on the phone first (IndexedDB), then uploaded to the
    team's Google Drive (Apps Script backend in config.js) whenever there is internet. */
 
-const VERSION = '2.2.1';
+const VERSION = '2.2.2';
 const API = ((window.BOOTH_CONFIG || {}).api || '').trim();
 const OPTIMIZE_MAX = 2560;           // longest side for "Optimized" uploads
 const OPTIMIZE_OVER = 1.5 * 1024 * 1024;
@@ -796,11 +796,12 @@ async function startCamera(s) {
   }
 }
 function scanLoop(s) {
+  const id = s.loop = (s.loop || 0) + 1;   // a camera restart must never leave two loops running
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d', { willReadFrequently: true });
   let frame = 0;
   const tick = async () => {
-    if (scanSession !== s || s.done || !s.stream) return;
+    if (scanSession !== s || s.done || !s.stream || s.loop !== id) return;
     const v = s.video;
     if (!s.busy && v.readyState >= 2 && v.videoWidth) {
       s.busy = true;
@@ -815,7 +816,7 @@ function scanLoop(s) {
           const shot = await new Promise(r => full.toBlob(r, 'image/jpeg', 0.92));
           return gotCode(text, shot);
         }
-      } catch (e) { /* keep scanning */ } finally { s.busy = false; }
+      } catch (e) { if (/QR reader/.test(e && e.message)) s.msg.textContent = e.message; } finally { s.busy = false; }
     }
     s.timer = setTimeout(tick, 180);
   };
@@ -840,7 +841,7 @@ async function scanFiles(input) {
   if (!file || !s) return;
   s.msg.textContent = 'Reading the QR code\u2026';
   let text = '';
-  try { text = await decodeImageFile(file); } catch (e) { text = ''; s.msg.textContent = e.message; }
+  try { text = await decodeImageFile(file); } catch (e) { if (scanSession === s) s.msg.textContent = e.message; return; }
   if (scanSession !== s) return;
   if (!text) { s.msg.textContent = 'No QR code found in that photo. Fill the frame with the QR code, keep it sharp, and try again.'; return; }
   gotCode(text, file);
@@ -1155,6 +1156,8 @@ document.addEventListener('visibilitychange', () => {
 });
 setInterval(() => sync(), 60000);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+// if the QR reader is missing from the offline cache (e.g. an update interrupted by a signal drop), fetch it while online
+setTimeout(async () => { try { if (!window.caches || !(await caches.match('jsqr.js'))) await loadJsQR(); } catch (e) { /* retried next start */ } }, 3000);
 
 (async () => {
   await loadLocal();
