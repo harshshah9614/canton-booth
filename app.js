@@ -2,7 +2,7 @@
 /* Canton booth app - offline-first PWA. Everything is saved on the phone first (IndexedDB), then uploaded to the
    team's Google Drive (Apps Script backend in config.js) whenever there is internet. */
 
-const VERSION = '2.2.2';
+const VERSION = '2.3.0';
 const API = ((window.BOOTH_CONFIG || {}).api || '').trim();
 const OPTIMIZE_MAX = 2560;           // longest side for "Optimized" uploads
 const OPTIMIZE_OVER = 1.5 * 1024 * 1024;
@@ -44,6 +44,8 @@ const ICON = {
   grid: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'],
   qr: ['M3 3h6v6H3z', 'M15 3h6v6h-6z', 'M3 15h6v6H3z', 'M15 15h2v2h-2z', 'M19 15h2', 'M15 19h2', 'M19 19h2v2'],
   image: ['M3 5h18v14H3z', 'M8 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z', 'M21 16l-5-5L5 19'],
+  mic: ['M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z', 'M19 10v2a7 7 0 0 1-14 0v-2', 'M12 19v3'],
+  audio: ['M9 18V5l12-2v13', 'M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M18 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
 };
 const DASH_PAGES = [
   ['cc.html', 'Command Centre', 'Shortlist by walking order, venue maps, routes, Alibaba / 365 summary'],
@@ -200,7 +202,7 @@ function visitPayload(v) {
 }
 
 // only a bad file or missing name can never succeed; busy/lock/server errors keep retrying every minute
-const permanent = e => /not a photo|larger than 30 MB|Empty photo|required|id missing|missing on this phone/i.test(e.message || '');
+const permanent = e => /not a photo|not an audio|larger than 30 MB|Empty (photo|voice)|required|id missing|missing on this phone/i.test(e.message || '');
 
 async function sync(manual) {
   if (S.syncing || !S.pass) return;
@@ -515,7 +517,10 @@ function viewNotes() {
     h('div', { class: 'seg' }, [['all', 'Everyone'], ['mine', 'Mine'], ['team', 'Team'], ['follow', 'Follow-ups']].map(([k, l]) =>
       h('button', { class: S.notesFilter === k ? 'on' : '', onclick: () => { S.notesFilter = k; render(); } }, l))),
     list.length ? list.map(v => {
-      const ph = S.photos.filter(p => p.client_id === v.client_id).length || Number(v.photos || 0);
+      const files = S.photos.filter(p => p.client_id === v.client_id);
+      const vn = files.filter(p => p.kind === 'voice').length;
+      const ph = files.length - vn;
+      const inDrive = files.length ? 0 : Number(v.photos || 0);   // a teammate's note: Drive counts photos and voice notes together
       return h('button', { class: 'note-card', onclick: () => openForm({ visit: v }) },
         h('div', { class: 'booth' }, v.supplier_name),
         h('div', { class: 'meta' }, [v.booth && String(v.booth).split(',')[0], v.recorded_by, v.saved_at].filter(Boolean).join(' \u00b7 ')),
@@ -524,6 +529,8 @@ function viewNotes() {
           v.next_step ? h('span', { class: 'tag warn' }, 'Next: ' + String(v.next_step).slice(0, 40)) : null,
           v.sample === 'requested' ? h('span', { class: 'tag warn' }, 'Sample requested') : null,
           ph ? h('span', { class: 'tag' }, `${ph} photo${ph > 1 ? 's' : ''}`) : null,
+          vn ? h('span', { class: 'tag' }, `${vn} voice note${vn > 1 ? 's' : ''}`) : null,
+          inDrive ? h('span', { class: 'tag' }, `${inDrive} file${inDrive > 1 ? 's' : ''} in Drive`) : null,
           !v.supplier_id ? h('span', { class: 'tag warn' }, 'New supplier') : null,
           v.sync === 'synced' ? null : h('span', { class: 'tag ' + (v.sync === 'error' ? 'bad' : 'warn') }, v.sync === 'error' ? 'Upload problem' : 'Waiting to upload')));
     }) : h('div', { class: 'empty' }, 'No booth notes yet. Tap a stop in the itinerary or the + button.'),
@@ -612,7 +619,8 @@ function renderForm() {
         h('div', { class: 'section-title' }, 'Discussion', h('button', { class: 'link', onclick: openEditor }, svg(ICON.expand, 16), ' Full screen')),
         field('Products discussed', 'products'),
         h('label', { class: 'f', for: 'f_notes' }, 'Notes'), notes,
-        h('div', { class: 'hint' }, 'Tip: use the microphone on your keyboard to dictate.')),
+        h('div', { class: 'hint' }, 'Tip: the microphone on your keyboard types what you say. A voice note keeps the recording itself.'),
+        voiceSection(f)),
       h('div', { class: 'card' },
         h('div', { class: 'section-title' }, 'Commercials'),
         h('div', { class: 'grid3' }, h('div', {}, field('FOB price', 'fob_price', { placeholder: 'USD' })), h('div', {}, field('MOQ', 'moq')), h('div', {}, field('Lead time', 'lead_time'))),
@@ -623,7 +631,7 @@ function renderForm() {
         h('div', { class: 'section-title' }, 'Photos', h('span', { class: 'hint' }, S.quality === 'original' ? 'Original quality' : 'Optimized for roaming')),
         h('div', { class: 'photo-actions' },
           photoPicker('card', 'Business card', ICON.card), photoPicker('product', 'Products', ICON.box), photoPicker('booth', 'Booth / other', ICON.camera)),
-        h('div', { class: 'thumbs', id: 'thumbs' }, f.photos.map(thumb)),
+        h('div', { class: 'thumbs', id: 'thumbs' }, f.photos.filter(p => p.kind !== 'voice').map(thumb)),
         h('div', { class: 'hint' }, 'Any photo format: JPG, HEIC, PNG, WebP, GIF, TIFF, RAW (DNG).')),
       team.length ? h('div', { class: 'card' }, h('div', { class: 'section-title' }, 'Team notes'),
         team.map(t => h('div', { class: 'team-note' }, h('b', {}, `${t.recorded_by || 'Teammate'} \u00b7 ${t.saved_at || ''}`), '\n', t.notes || '(no notes)'))) : null,
@@ -671,7 +679,7 @@ async function addFiles(files, kind) {
   let added = 0;
   for (const file of files) {
     try {
-      const p = await prepare(file);
+      const p = kind === 'voice' ? prepareAudio(file) : await prepare(file);
       const rec = { photo_id: uid(), client_id: S.form.client_id, kind, name: p.name, mime: p.mime, size: p.size, preview: p.preview,
         sync: 'held', added_at: new Date().toISOString() };
       await DB.put('blobs', { photo_id: rec.photo_id, blob: p.blob });
@@ -706,6 +714,175 @@ async function removePhoto(p) {
   S.form.photos = S.form.photos.filter(x => x.photo_id !== p.photo_id);
   renderForm();
 }
+
+// ---------- voice notes: recorded on the phone, kept like photos, uploaded to the supplier's Drive folder ----------
+const MAX_REC_SEC = 600;
+const AUDIO_MIME = { m4a: 'audio/mp4', aac: 'audio/aac', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg',
+  webm: 'audio/webm', amr: 'audio/amr', '3gp': 'audio/3gpp', caf: 'audio/x-caf', flac: 'audio/flac' };
+const audioExt = mime => ({ 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/mpeg': 'mp3', 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/wav': 'wav' })[mime] || 'm4a';
+const clock = sec => `${Math.floor(sec / 60)}:${pad(Math.floor(sec % 60))}`;
+const clipUrls = new Map();
+let recSession = null;
+
+function prepareAudio(file) {
+  const name = file.name || 'voice_note';
+  const ext = (name.match(/\.([a-z0-9]{2,4})$/i) || [, ''])[1].toLowerCase();
+  const mime = /^audio\//.test(file.type || '') ? file.type : AUDIO_MIME[ext];
+  if (!mime) throw new Error(`${name} is not an audio recording`);
+  if (!file.size) throw new Error(`${name} is empty`);
+  if (file.size > MAX_FILE) throw new Error(`${name} is larger than 30 MB`);
+  return { blob: file, mime, name, size: file.size, preview: false };
+}
+function voiceSection(f) {
+  const clips = f.photos.filter(p => p.kind === 'voice');
+  return [
+    h('div', { class: 'voice-actions' },
+      h('button', { class: 'btn ghost', onclick: openRecorder }, svg(ICON.mic, 20), 'Record voice note'),
+      h('label', { class: 'btn ghost', for: 'pick_voice' }, svg(ICON.audio, 20), 'Add recording',
+        h('input', { id: 'pick_voice', type: 'file', class: 'hidden', multiple: true,
+          accept: 'audio/*,.m4a,.mp3,.aac,.wav,.ogg,.opus,.webm,.amr,.3gp,.caf,.flac', onchange: addAudio }))),
+    clips.length ? h('div', { class: 'clips' }, clips.map(clip)) : null,
+  ];
+}
+async function addAudio(e) {
+  const files = [...e.target.files];
+  e.target.value = '';
+  const n = await addFiles(files, 'voice');
+  if (n) toast(`${n} recording${n > 1 ? 's' : ''} added - tap Save notes to upload`);
+}
+function clip(p) {
+  const state = p.sync === 'synced' ? 'in Drive' : p.sync === 'error' ? 'upload problem' : p.sync === 'held' ? 'not saved yet' : 'waiting to upload';
+  const audio = h('audio', { controls: true, preload: 'metadata' });
+  if (clipUrls.has(p.photo_id)) audio.src = clipUrls.get(p.photo_id);
+  else photoBlob(p).then(b => { if (b) { const u = URL.createObjectURL(b); clipUrls.set(p.photo_id, u); audio.src = u; } });
+  return h('div', { class: 'clip' },
+    h('div', { class: 'clip-top' }, svg(ICON.mic, 16), h('b', {}, 'Voice note'),
+      h('span', { class: 'hint' }, [p.duration ? clock(p.duration) : '', kb(p.size || 0), state].filter(Boolean).join(' \u00b7 ')),
+      p.sync === 'held' ? h('button', { class: 'x', 'aria-label': 'Remove voice note', onclick: () => removePhoto(p) }, '\u00d7') : null),
+    audio);
+}
+function dropClipUrls() {
+  for (const u of clipUrls.values()) URL.revokeObjectURL(u);
+  clipUrls.clear();
+}
+function pickAudioType() {
+  for (const t of ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']) {
+    try { if (MediaRecorder.isTypeSupported(t)) return t; } catch (e) { /* very old browser: use its default */ }
+  }
+  return '';
+}
+async function openRecorder() {
+  if (recSession || !S.form) return;
+  if (!window.MediaRecorder || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return dialog('Recording not available here', 'Record with the phone\'s own voice recorder app, then tap Add recording.', [{ label: 'OK', value: true }]);
+  }
+  const f = S.form;
+  const time = h('div', { class: 'rec-time' }, '0:00');
+  const msg = h('div', { class: 'rec-msg' }, 'Starting the microphone\u2026');
+  const stopBtn = h('button', { class: 'btn', disabled: true, onclick: () => stopRecording('save') }, 'Stop & save');
+  const box = h('div', { class: 'scrim rec', role: 'dialog', 'aria-label': 'Record voice note' },
+    h('div', { class: 'dialog' }, h('h2', {}, h('span', { class: 'rec-dot' }), 'Voice note'), time, msg, stopBtn,
+      h('button', { class: 'btn ghost', onclick: cancelRecording }, 'Cancel')));
+  document.body.append(box);
+  const s = recSession = { box, time, msg, stopBtn, f, id: uid(), label: stamp().replace(/[-: ]/g, ''), added_at: new Date().toISOString(),
+    chunks: [], chain: Promise.resolve(), start: 0, end: 0, savedAt: 0, wasDirty: f.dirty };
+  // a draft keeps the note (and a recording cut short by the phone) on the phone if the app is closed before Save
+  f.dirty = true; store.setJson('draft_' + f.client_id, f.values);
+  try {
+    s.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    if (recSession !== s) { s.stream.getTracks().forEach(t => t.stop()); return; }
+    const type = pickAudioType();
+    try { s.rec = new MediaRecorder(s.stream, { ...(type ? { mimeType: type } : {}), audioBitsPerSecond: 64000 }); }
+    catch (e) { s.rec = new MediaRecorder(s.stream); }
+    s.type = type;
+    s.rec.ondataavailable = e => { if (e.data && e.data.size) s.chunks.push(e.data); };
+    s.rec.onstop = () => finishRecording(s);
+    s.rec.start(1000);
+  } catch (e) {
+    if (recSession !== s) return;
+    closeRecorder(s, true);
+    return dialog('Microphone not available', e && e.name === 'NotAllowedError'
+      ? 'Allow the microphone for this app and try again (iPhone: tap Allow when asked; if it was refused, close the app fully and reopen it). Or record with the phone\'s voice recorder app and tap Add recording.'
+      : 'The microphone could not start. Record with the phone\'s voice recorder app, then tap Add recording.', [{ label: 'OK', value: true }]);
+  }
+  s.start = Date.now();
+  s.timer = setInterval(() => tickRecorder(s), 500);
+  msg.textContent = 'Recording. Keep this screen open - locking the phone or switching apps stops the recording and saves it.';
+  stopBtn.disabled = false;
+  try {
+    s.wake = await navigator.wakeLock.request('screen');
+    if (s.stopping) s.wake.release().catch(() => {});
+  } catch (e) { /* no wake lock: the screen may dim, recording continues */ }
+}
+function tickRecorder(s) {
+  const sec = (Date.now() - s.start) / 1000;
+  s.time.textContent = clock(sec);
+  if (sec >= MAX_REC_SEC) return stopRecording('save', '10-minute limit reached - voice note saved. Record another one to continue.');
+  if (sec - s.savedAt >= 20) { s.savedAt = sec; checkpoint(s, false); }
+}
+// writes what is recorded so far to the phone (every 20 s and at the end); a crash loses at most the last 20 seconds
+function checkpoint(s, final) {
+  s.chain = s.chain.then(async () => {
+    const mime = String((s.chunks[0] && s.chunks[0].type) || (s.rec && s.rec.mimeType) || s.type || 'audio/mp4').split(';')[0];
+    const blob = new Blob(s.chunks, { type: mime });
+    if (!blob.size) return null;
+    const rec = { photo_id: s.id, client_id: s.f.client_id, kind: 'voice', name: `voice_note_${s.label}.${audioExt(mime)}`, mime, size: blob.size,
+      duration: Math.round(((s.end || Date.now()) - s.start) / 1000), preview: false, sync: 'held', added_at: s.added_at, partial: !final };
+    await DB.put('blobs', { photo_id: s.id, blob });
+    await DB.put('photos', rec);
+    return rec;
+  }).catch(e => { toast('Could not save the recording: ' + e.message); return null; });
+  return s.chain;
+}
+function stopRecording(mode, note) {
+  const s = recSession;
+  if (!s || s.stopping) return;
+  Object.assign(s, { stopping: true, cancel: mode === 'cancel', note, end: Date.now() });
+  s.stopBtn.disabled = true; s.msg.textContent = 'Saving\u2026';
+  try { if (s.rec && s.rec.state !== 'inactive') { s.rec.stop(); return; } } catch (e) { /* already stopped */ }
+  finishRecording(s);
+}
+async function cancelRecording() {
+  const s = recSession;
+  if (s && s.start && Date.now() - s.start > 5000 && !(await dialog('Discard this recording?', 'It will not be saved.',
+    [{ label: 'Discard', value: true, style: 'danger' }, { label: 'Keep recording', value: false, style: 'ghost' }]))) return;
+  stopRecording('cancel');
+}
+async function finishRecording(s) {
+  if (s.finished) return;
+  s.finished = true;
+  s.end = s.end || Date.now();
+  clearInterval(s.timer);
+  if (s.stream) s.stream.getTracks().forEach(t => t.stop());
+  if (s.wake) s.wake.release().catch(() => {});
+  const rec = s.cancel ? null : await checkpoint(s, true);
+  if (s.cancel) { await s.chain; await dropPhoto(s.id); }
+  closeRecorder(s, s.cancel);
+  if (s.cancel) return;
+  if (!rec) { toast('Nothing was recorded - try again'); return; }
+  const f = s.f;
+  f.photos = f.photos.filter(p => p.photo_id !== rec.photo_id).concat(rec);
+  f.dirty = true; store.setJson('draft_' + f.client_id, f.values);
+  if (S.form !== f) return;
+  if (document.visibilityState === 'hidden') {
+    const ok = await saveForm({ auto: true });
+    if (S.form === f) renderForm();
+    if (ok) sync();
+    return;
+  }
+  renderForm();
+  toast(s.note || (s.stopping ? 'Voice note added - tap Save notes to upload' : 'The phone stopped the recording - what was recorded is saved'));
+}
+function closeRecorder(s, nothingKept) {
+  clearInterval(s.timer);
+  if (s.stream) s.stream.getTracks().forEach(t => t.stop());
+  if (recSession === s) recSession = null;
+  s.box.remove();
+  if (nothingKept && !s.wasDirty) { s.f.dirty = false; store.del('draft_' + s.f.client_id); }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && recSession) stopRecording('save', 'Recording stopped when you left the app - voice note saved');
+});
 
 // ---------- QR scanner (WeChat / business cards): decodes on the phone, works offline ----------
 let scanSession = null;
@@ -1016,7 +1193,7 @@ async function saveForm(opts = {}) {
     await loadLocal();
     return true;
   }
-  S.form = null; $('#form').remove();
+  S.form = null; $('#form').remove(); dropClipUrls();
   await loadLocal();
   toast(navigator.onLine ? 'Saved - uploading to Drive' : 'Saved on your phone - uploads when online');
   render();
@@ -1037,7 +1214,7 @@ async function closeForm() {
     }
     if (pick === 'draft') toast('Draft kept - find it under Notes');
   }
-  S.form = null; const el = $('#form'); if (el) el.remove();
+  S.form = null; const el = $('#form'); if (el) el.remove(); dropClipUrls();
   render();
 }
 
@@ -1048,7 +1225,7 @@ async function deleteVisit(f) {
   for (const p of await DB.photosOf(f.client_id)) await dropPhoto(p.photo_id);
   await DB.del('visits', f.client_id);
   store.del('draft_' + f.client_id);
-  S.form = null; $('#form').remove();
+  S.form = null; $('#form').remove(); dropClipUrls();
   await loadLocal(); render();
 }
 
@@ -1060,7 +1237,7 @@ function openSyncSheet() {
   const sheet = h('div', { class: 'scrim', onclick: e => { if (e.target === sheet) sheet.remove(); } },
     h('div', { class: 'dialog' }, h('h2', {}, 'Sync to Google Drive'),
       h('div', { class: 'kv' }, h('span', {}, 'Notes waiting'), h('span', {}, String(vPend.length))),
-      h('div', { class: 'kv' }, h('span', {}, 'Photos waiting'), h('span', {}, `${pPend.length}${pPend.length ? ' \u00b7 ' + kb(bytes) : ''}`)),
+      h('div', { class: 'kv' }, h('span', {}, 'Photos & voice notes waiting'), h('span', {}, `${pPend.length}${pPend.length ? ' \u00b7 ' + kb(bytes) : ''}`)),
       h('div', { class: 'kv' }, h('span', {}, 'Internet'), h('span', {}, navigator.onLine ? 'Connected' : 'Offline')),
       h('div', { class: 'kv' }, h('span', {}, 'Last sync'), h('span', {}, ago(S.lastSync))),
       S.lastError ? h('p', { class: 'err' }, S.lastError) : null,
@@ -1162,6 +1339,10 @@ setTimeout(async () => { try { if (!window.caches || !(await caches.match('jsqr.
 (async () => {
   await loadLocal();
   for (const p of S.photos.filter(x => x.sync === 'held')) {
+    if (p.partial && S.visits.some(v => v.client_id === p.client_id)) {   // a recording cut off by a crash: keep what was captured
+      await DB.put('photos', { ...p, sync: 'pending', partial: false });
+      continue;
+    }
     if (!store.json('draft_' + p.client_id)) await dropPhoto(p.photo_id);   // photos from a form that was never saved
   }
   await loadLocal();

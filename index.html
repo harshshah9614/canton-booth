@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Booth app">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src https://script.google.com https://script.googleusercontent.com; manifest-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src https://script.google.com https://script.googleusercontent.com; manifest-src 'self'">
 <title>Canton booth app</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -131,6 +131,18 @@ textarea.i { min-height:170px; resize:vertical; line-height:1.5; }
 .editor textarea { flex:1; border:0; outline:none; background:none; font-size:17px; line-height:1.55; resize:none; padding:8px 2px; }
 .editor .row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding-bottom:8px; border-bottom:1px solid var(--line); }
 .qr-btn { margin:2px 0 4px; }
+.voice-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+.voice-actions .btn { padding:12px 8px; font-size:14.5px; }
+.clips { display:grid; gap:8px; margin-top:10px; }
+.clip { border:1px solid var(--line); border-radius:12px; padding:8px 10px; background:var(--surface-2); }
+.clip-top { display:flex; align-items:center; gap:6px; font-size:14px; color:var(--acc); }
+.clip-top b { color:var(--ink); } .clip-top .hint { margin:0; flex:1; }
+.clip-top .x { border:0; background:none; color:var(--bad); font-size:22px; line-height:1; padding:0 4px; }
+.clip audio { display:block; width:100%; height:40px; margin-top:6px; }
+.rec .dialog h2 { display:flex; align-items:center; gap:10px; }
+.rec-dot { width:12px; height:12px; border-radius:50%; background:var(--bad); animation:pulse 1s infinite; }
+.rec-time { font-size:44px; font-weight:800; text-align:center; font-variant-numeric:tabular-nums; margin:6px 0 2px; }
+.rec-msg { text-align:center; color:var(--ink-2); font-size:14.5px; margin-bottom:14px; }
 .scan { position:fixed; inset:0; z-index:85; background:#000; overflow:hidden; }
 .scan video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 .scan-frame { position:absolute; left:50%; top:42%; width:min(70vw, 320px); height:min(70vw, 320px); transform:translate(-50%, -50%); border:3px solid rgba(255,255,255,.92); border-radius:18px; box-shadow:0 0 0 100vmax rgba(0,0,0,.38); pointer-events:none; }
