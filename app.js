@@ -2,7 +2,7 @@
 /* Canton booth app - offline-first PWA. Everything is saved on the phone first (IndexedDB), then uploaded to the
    team's Google Drive (Apps Script backend in config.js) whenever there is internet. */
 
-const VERSION = '2.2.0';
+const VERSION = '2.2.1';
 const API = ((window.BOOTH_CONFIG || {}).api || '').trim();
 const OPTIMIZE_MAX = 2560;           // longest side for "Optimized" uploads
 const OPTIMIZE_OVER = 1.5 * 1024 * 1024;
@@ -719,17 +719,22 @@ function loadJsQR() {
     document.head.append(s);
   });
 }
-function nativeDetector() {
+async function nativeDetector() {
   if (qrDetector !== undefined) return qrDetector;
   qrDetector = null;
-  try { if ('BarcodeDetector' in window) qrDetector = new BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { qrDetector = null; }
+  try {
+    if ('BarcodeDetector' in window && (await BarcodeDetector.getSupportedFormats()).includes('qr_code'))
+      qrDetector = new BarcodeDetector({ formats: ['qr_code'] });
+  } catch (e) { qrDetector = null; }
   return qrDetector;
 }
-async function decodeCanvas(c, thorough) {
-  const bd = nativeDetector();
+// the phone's built-in reader is fastest; jsQR also runs every 3rd live frame because some Androids without Google
+// services expose a built-in reader that never finds anything
+async function decodeCanvas(c, thorough, frame = 0) {
+  const bd = await nativeDetector();
   if (bd) {
-    try { const r = await bd.detect(c); if (r[0] && r[0].rawValue) return r[0].rawValue; } catch (e) { /* use jsQR */ }
-    if (!thorough) return '';
+    try { const r = await bd.detect(c); if (r[0] && r[0].rawValue) return r[0].rawValue; } catch (e) { qrDetector = null; }
+    if (!thorough && frame % 3 && qrDetector) return '';
   }
   const jsQR = await loadJsQR();
   const d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height);
@@ -739,11 +744,14 @@ async function decodeCanvas(c, thorough) {
 async function decodeImageFile(file) {
   const img = await decodable(file);
   if (!img) return '';
+  const W = img.naturalWidth, H = img.naturalHeight;
   try {
-    for (const max of [1200, 2000, 700]) {
-      const sc = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
-      const c = h('canvas', { width: Math.round(img.naturalWidth * sc), height: Math.round(img.naturalHeight * sc) });
-      c.getContext('2d', { willReadFrequently: true }).drawImage(img, 0, 0, c.width, c.height);
+    // whole photo at three sizes, then zoom into the middle (people centre the QR) for small or distant codes
+    for (const [crop, max] of [[1, 1200], [1, 2000], [0.5, 1600], [0.3, 1400], [1, 700]]) {
+      const sw = Math.round(W * crop), sh = Math.round(H * crop);
+      const sc = Math.min(1, max / Math.max(sw, sh));
+      const c = h('canvas', { width: Math.round(sw * sc), height: Math.round(sh * sc) });
+      c.getContext('2d', { willReadFrequently: true }).drawImage(img, Math.round((W - sw) / 2), Math.round((H - sh) / 2), sw, sh, 0, 0, c.width, c.height);
       const t = await decodeCanvas(c, true);
       if (t) return t;
     }
@@ -790,6 +798,7 @@ async function startCamera(s) {
 function scanLoop(s) {
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d', { willReadFrequently: true });
+  let frame = 0;
   const tick = async () => {
     if (scanSession !== s || s.done || !s.stream) return;
     const v = s.video;
@@ -799,7 +808,7 @@ function scanLoop(s) {
         const sc = Math.min(1, 900 / Math.max(v.videoWidth, v.videoHeight));
         c.width = Math.round(v.videoWidth * sc); c.height = Math.round(v.videoHeight * sc);
         ctx.drawImage(v, 0, 0, c.width, c.height);
-        const text = await decodeCanvas(c, false);
+        const text = await decodeCanvas(c, false, frame++);
         if (text && scanSession === s && !s.done) {
           const full = h('canvas', { width: v.videoWidth, height: v.videoHeight });
           full.getContext('2d').drawImage(v, 0, 0);
