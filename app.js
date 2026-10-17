@@ -2,7 +2,7 @@
 /* Canton booth app - offline-first PWA. Everything is saved on the phone first (IndexedDB), then uploaded to the
    team's Google Drive (Apps Script backend in config.js) whenever there is internet. */
 
-const VERSION = '2.5.0';
+const VERSION = '2.5.1';
 const API = ((window.BOOTH_CONFIG || {}).api || '').trim();
 const OPTIMIZE_MAX = 2560;           // longest side for "Optimized" uploads
 const OPTIMIZE_OVER = 1.5 * 1024 * 1024;
@@ -332,21 +332,46 @@ function loadDirectory() {
       }
       const list = raw.exhibitors.map(e => { const c = (e.k || []).map(i => (raw.cats || [])[i]).filter(Boolean); return { ...e, c,
         mine: byName.get(normName(e.n)) || e.bo.map(x => byBooth.get(`${x.p}|${boothBase(x.b)}`)).find(Boolean) || null,
-        key: [e.n, ...e.bo.map(x => `${x.b} ${x.a}`), ...c, ...(e.pr || []), ...(e.kw || []), ...(e.q || []).map(i => (raw.terms || [])[i])].join(' ').toLowerCase() }; });
-      S.dir = { list, generated: raw.generated, halls: {} };
+        f: { n: e.n.toLowerCase(), b: e.bo.map(x => x.b).join(' ').toLowerCase(), a: e.bo.map(x => x.a).join(' | ').toLowerCase(), c: c.join(' | ').toLowerCase(),
+          p: [...(e.pr || []), ...(e.kw || [])].join(' | ').toLowerCase(), t: (e.q || []).map(i => (raw.terms || [])[i]).join(' | ').toLowerCase() } }; });
+      S.dir = { list, generated: raw.generated, halls: {}, areas: [...new Set(list.flatMap(e => e.bo.map(x => x.a)).filter(Boolean))] };
       return S.dir;
     } catch (e) { return null; } finally { S.dirLoading = null; }
   })();
   return S.dirLoading;
 }
 const dirSeen = () => new Set(allVisits().filter(v => !v.supplier_id).map(v => normName(v.supplier_name)));
+// search words: plural -> singular, then whole-word match (short words allow s/es/en/ed/ing, longer words also match as a word start)
+const stem = w => w.length <= 3 ? w : /ies$/.test(w) ? w.slice(0, -3) + 'y' : /(ss|x|z|ch|sh)es$/.test(w) ? w.slice(0, -2) : /[^s]s$/.test(w) ? w.slice(0, -1) : w;
+function wordRe(w) {
+  const s = stem(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp('(^|[^a-z0-9])' + s + (s.length >= 5 ? '' : '(s|es|en|ed|ing)?(?![a-z0-9])'));
+}
+// words in company names that say nothing about what a supplier makes
+const GENERIC = new Set('industrial industry products product crafts craft arts art textiles textile home trading trade import export imp exp international group technology tech manufacturing manufacture factory goods commodities household enterprise enterprises development light general new material materials co ltd company gifts gift garments garment decoration decorations supplies supply holdings science economic'.split(' '));
+// relevance of a fair exhibitor for the search words (0 = no match); e.bf = the booths to list
+function fairScore(e, res) {
+  let total = 0, onlyArea = true;
+  for (const { w, re } of res) {
+    const f = e.f;
+    const strong = re.test(f.t) || re.test(f.p) || re.test(f.b) ? 3 : !GENERIC.has(stem(w)) && re.test(f.n) ? 2 : 0;
+    const sc = Math.max(strong, re.test(f.a) ? 2 : 0, re.test(f.c) ? 1 : 0);
+    if (!sc) return 0;
+    if (strong >= 2) onlyArea = false;
+    total += sc;
+  }
+  if (total < 2 * res.length) return 0;
+  e.bf = onlyArea ? e.bo.filter(x => res.every(({ re }) => re.test(x.a.toLowerCase()))) : null;
+  if (e.bf && !e.bf.length) return 0;
+  return total;
+}
 function openDirectory(e) {
   if (e.mine) return openForm({ supplier: e.mine });
   const mine = allVisits().find(v => !v.supplier_id && !v.team && normName(v.supplier_name) === normName(e.n));
   return mine ? openForm({ visit: mine }) : openForm({ directory: e });
 }
-function dirRow(e, hallKey, seen, phase) {
-  const b = e.bo.find(x => hallKey && x.b.startsWith(hallKey) && (!phase || String(x.p) === phase)) || e.bo[0];
+function dirRow(e, hallKey, seen, phase, area) {
+  const b = e.bo.find(x => (!hallKey || x.b.startsWith(hallKey)) && (!phase || String(x.p) === phase) && (!area || x.a === area)) || e.bo[0];
   const v = seen.has(normName(e.n));
   return h('button', { class: 'result dir' + (v ? ' visited' : ''), onclick: () => openDirectory(e) },
     h('div', { class: 'row-head' }, h('span', { class: 'booth-code' }, b.b), h('div', { class: 'booth' }, e.n)),
@@ -360,15 +385,26 @@ function dirRow(e, hallKey, seen, phase) {
 // fair hits for a search: grouped by hall floor, then the top 3 per exhibit area (fair badges first, then booth size)
 function fairResults(fair, dseen) {
   const halls = new Map(), areas = new Map();
+  const booths = e => e.bf || e.bo;
   for (const e of fair) {
-    for (const x of e.bo) for (const k of hallKeys(x.b)) {
+    for (const x of booths(e)) for (const k of hallKeys(x.b)) {
       const g = `${x.p}|${k}`;
       if (!halls.has(g)) halls.set(g, []);
       if (!halls.get(g).includes(e)) halls.get(g).push(e);
     }
-    for (const a of new Set(e.bo.map(x => x.a).filter(Boolean))) { if (!areas.has(a)) areas.set(a, []); areas.get(a).push(e); }
   }
-  const rank = (a, b) => (b.s || 0) - (a.s || 0) || (b.u || 0) - (a.u || 0);
+  // big traders exhibit in many sections: rank each one once, in the section where this search has the most matches
+  const areaOf = e => [...new Set(booths(e).map(x => x.a).filter(Boolean))];
+  const seen = new Map();
+  for (const e of fair) for (const a of areaOf(e)) seen.set(a, (seen.get(a) || 0) + 1);
+  for (const e of fair) {
+    const as = areaOf(e);
+    if (!as.length) continue;
+    const a = as.reduce((b, x) => seen.get(x) > seen.get(b) ? x : b);
+    if (!areas.has(a)) areas.set(a, []);
+    areas.get(a).push(e);
+  }
+  const rank = (a, b) => (b.r || 0) - (a.r || 0) || (b.s || 0) - (a.s || 0) || (b.u || 0) - (a.u || 0);
   const hallKeysSorted = [...halls.keys()].sort((a, b) => boothSort(a, b));
   const areaList = [...areas.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 8);
   return [
@@ -380,10 +416,33 @@ function fairResults(fair, dseen) {
         rows.slice(0, 60).map(e => dirRow(e, k, dseen, p)), rows.length > 60 ? h('div', { class: 'hint' }, 'Showing 60 - type more to narrow down.') : null);
     }),
     h('div', { class: 'eyebrow', id: 'r-top' }, 'Top 3 per exhibit area'),
-    h('div', { class: 'hint', style: 'margin-top:-4px' }, 'Ranked by fair badges (Brand, CF Award, multi-session), then booth size.'),
+    h('div', { class: 'hint', style: 'margin-top:-4px' }, 'Best match first, then fair badges (Brand, CF Award, multi-session) and booth size.'),
     areaList.map(([a, list]) => h('div', { class: 'top-area' }, h('div', { class: 'section-row' }, h('b', {}, a), h('span', { class: 'hint', style: 'margin:0' }, `${list.length} match${list.length === 1 ? '' : 'es'}`)),
-      list.slice().sort(rank).slice(0, 3).map(e => dirRow(e, '', dseen)))),
+      list.slice().sort(rank).slice(0, 3).map(e => dirRow(e, '', dseen, '', a)))),
   ];
+}
+// the dashboard's Fair Map page (cached on the phone) with its booth finder filled in
+function showOnFairMap(booth, phase) {
+  const code = String(booth || '').split(',')[0].trim();
+  if (!store.get('pagesAt')) return toast('Download the guide pages first (Guide tab)');
+  const frame = h('iframe', { src: 'd/fair-map.html', title: 'Fair Map', style: 'flex:1;width:100%;border:0;background:#fff;border-radius:10px;margin-top:8px' });
+  frame.addEventListener('load', () => {
+    try {
+      const d = frame.contentDocument, q = d.getElementById('bf-q'), ph = d.getElementById('bf-phase');
+      if (ph && phase && [...ph.options].some(o => o.value === String(phase))) ph.value = String(phase);
+      if (q) { q.value = code; q.dispatchEvent(new Event('input'));
+        const w = frame.contentWindow; w.scrollTo(0, d.getElementById('finder').getBoundingClientRect().top + w.scrollY - 150); }
+    } catch (e) { /* page layout changed: the map still opens */ }
+  });
+  const ed = h('div', { class: 'editor' }, h('div', { class: 'row' }, h('b', {}, `Fair Map \u00b7 booth ${code}`),
+    h('button', { class: 'btn', style: 'width:auto;padding:9px 16px', onclick: () => ed.remove() }, 'Close')), frame);
+  document.body.append(ed);
+}
+function mapButtons(booth, phase) {
+  const hf = hallOf(booth);
+  return hf ? h('div', { class: 'btn-row' },
+    h('button', { class: 'btn ghost', onclick: () => showHallMap(booth) }, `Hall ${hf.hall} map`),
+    h('button', { class: 'btn ghost', onclick: () => showOnFairMap(booth, phase) }, 'Show on Fair Map')) : null;
 }
 
 // ---------- photos: every format accepted; optimized copies only when the browser can decode them ----------
@@ -650,13 +709,24 @@ function resultsBox() {
   if (q.length >= 2 && !S.index) loadIndex().then(renderResults);
   const words = q.split(/\s+/).filter(Boolean);
   const match = text => words.every(w => String(text || '').toLowerCase().includes(w));
+  const res = words.map(w => ({ w, re: wordRe(w) }));
   const all = (S.data.suppliers || []).filter(s => S.findFilter === 'all' || (S.findFilter === 'short' ? s.shortlist : !s.shortlist));
-  const hits = q ? all.filter(s => match([s.name_en, s.name_cn, s.booth, s.category, s.subcategory].join(' '))) : all;
+  const hits = q ? all.filter(s => { const t = [s.name_en, s.category, s.subcategory].join(' | ').toLowerCase(), b = String(s.booth || '').toLowerCase();
+    return res.every(({ w, re }) => re.test(t) || b.includes(w) || String(s.name_cn || '').includes(w)); }) : all;
   const notes = q.length >= 2 ? allVisits().filter(v => match([v.supplier_name, v.notes, v.products, v.contact_name, v.next_step, v.wechat].join(' '))).slice(0, 20) : [];
   const dash = q.length >= 2 ? (S.index || []).filter(e => match(e.h + ' ' + e.t)).slice(0, 40) : [];
   const hasDir = !!store.get('dirAt');
   if (q.length >= 2 && hasDir && !S.dir) loadDirectory().then(d => { if (d) renderResults(); });
-  const fair = q.length >= 2 && S.dir && S.findFilter === 'all' ? S.dir.list.filter(e => !e.mine && words.every(w => e.key.includes(w))) : [];
+  const fairAreas = q.length >= 2 && S.dir ? S.dir.areas.filter(a => res.every(({ re }) => re.test(a.toLowerCase()))) : [];
+  let fair = [];
+  if (q.length >= 2 && S.dir && S.findFilter === 'all') {
+    for (const e of S.dir.list) {
+      if (e.mine) continue;
+      e.r = fairScore(e, res);
+      if (e.r) fair.push(e);
+    }
+    fair.sort((a, b) => b.r - a.r || (b.s || 0) - (a.s || 0));
+  }
   const dseen = fair.length ? dirSeen() : null;
   return h('div', { id: 'results' },
     fair.length ? h('div', { class: 'jump' }, [['r-ours', `Our list (${hits.length})`], ['r-hall', `By hall (${fair.length})`], ['r-top', 'Top 3 per area']].map(([id, l]) =>
@@ -676,7 +746,7 @@ function resultsBox() {
           v ? h('span', { class: 'tag ok' }, `${v} note${v > 1 ? 's' : ''}`) : null));
     }),
     hits.length > 80 ? h('div', { class: 'hint' }, 'Showing the first 80 - type to narrow down.') : null,
-    fair.length ? [fairResults(fair.slice(0, 600), dseen),
+    fair.length ? [fairAreas.length ? h('div', { class: 'hint' }, `Exhibit section: ${fairAreas.join(', ')}`) : null, fairResults(fair.slice(0, 600), dseen),
       fair.length > 600 ? h('div', { class: 'hint' }, `${fair.length} matches - showing the first 600. Type more to narrow down.`) : null] : null,
     q.length >= 2 && !hasDir ? h('div', { class: 'hint' }, 'Looking for a booth that is not on our list? Download the fair directory in Guide to search every Phase 2 and 3 exhibitor.') : null,
     q && !hits.length && !fair.length ? h('div', { class: 'empty' }, 'No match - add them as a new supplier below.') : null);
@@ -1002,14 +1072,14 @@ function renderForm() {
         h('div', { class: 'tags' }, supTags(sup),
           sup.canada_must_see ? h('span', { class: 'tag ca' }, 'Canada ' + sup.canada_must_see) : null),
         sup.next_action ? h('div', { class: 'ask' }, h('b', {}, 'Ask / check: '), sup.next_action) : null,
-        hallOf(sup.booth) ? h('button', { class: 'btn ghost', style: 'margin-top:10px', onclick: () => showHallMap(sup.booth) }, `Hall ${hallOf(sup.booth).hall} map \u00b7 where is this booth?`) : null)
+        mapButtons(sup.booth, sup.phase))
       : h('div', { class: 'card' }, h('div', { class: 'section-title' }, v._dir || (f.existing && f.existing.on_list === 'directory') ? 'From the fair directory' : 'New supplier'),
         v._dir ? h('div', { class: 'hint' }, 'Not on our list - your notes are saved as a separate fair-directory note.') : null,
         field('Company name *', 'new_name', { autocomplete: 'organization' }),
         h('div', { class: 'grid2' }, h('div', {}, field('Booth', 'new_booth', { placeholder: 'e.g. 12.2A19' })),
           h('div', {}, h('label', { class: 'f' }, 'Phase'), seg('phase_new', [['2', 'Phase 2'], ['3', 'Phase 3']], f.phase, x => { f.phase = x; setVal('phase', x); }))),
         field('Category / products', 'new_category'),
-        hallOf(v.new_booth) ? h('button', { class: 'btn ghost', style: 'margin-top:10px', onclick: () => showHallMap(v.new_booth) }, `Hall ${hallOf(v.new_booth).hall} map \u00b7 where is this booth?`) : null),
+        mapButtons(v.new_booth, f.phase)),
       captureCard(f),
       h('div', { class: 'card' },
         h('div', { class: 'section-title' }, 'Contact'),
