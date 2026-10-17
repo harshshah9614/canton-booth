@@ -2,7 +2,7 @@
 /* Canton booth app - offline-first PWA. Everything is saved on the phone first (IndexedDB), then uploaded to the
    team's Google Drive (Apps Script backend in config.js) whenever there is internet. */
 
-const VERSION = '2.4.0';
+const VERSION = '2.5.0';
 const API = ((window.BOOTH_CONFIG || {}).api || '').trim();
 const OPTIMIZE_MAX = 2560;           // longest side for "Optimized" uploads
 const OPTIMIZE_OVER = 1.5 * 1024 * 1024;
@@ -280,7 +280,7 @@ async function sync(manual) {
 
 async function refreshItinerary() {
   const r = await api('data');
-  S.data = r.data; S.team = r.visits || [];
+  S.data = r.data; S.team = r.visits || []; S.dir = null;
   store.setJson('data', S.data); store.setJson('team', S.team);
 }
 
@@ -301,6 +301,89 @@ async function loadIndex() {
     S.index = hit ? await hit.json() : [];
   } catch (e) { S.index = []; }
   return S.index;
+}
+
+// ---------- fair directory: every Phase 2/3 exhibitor, stored apart from our shortlist and itinerary (never merged into them) ----------
+const DIR_URL = () => new URL('d/_directory.json', location.href).href;
+const normName = s => String(s || '').toLowerCase().replace(/\(.*?\)/g, ' ')
+  .replace(/\b(co|ltd|limited|inc|corp|corporation|company|group|industrial|industry|trading|import|export|imp|exp|and)\b/g, ' ').replace(/[^a-z0-9\u4e00-\u9fff]+/g, '');
+const boothBase = b => String(b || '').trim().toUpperCase().replace(/-\d+$/, '');
+async function downloadDirectory() {
+  const r = await api('directory', {}, 180000);
+  const d = r.directory || {};
+  if (!Array.isArray(d.exhibitors)) throw new Error('The directory file in Drive is not valid');
+  await (await caches.open('canton-dash')).put(DIR_URL(), new Response(JSON.stringify(d), { headers: { 'Content-Type': 'application/json' } }));
+  store.set('dirAt', d.generated || stamp()); store.set('dirCount', String(d.exhibitors.length));
+  S.dir = null;
+  return loadDirectory();
+}
+function loadDirectory() {
+  if (S.dir) return Promise.resolve(S.dir);
+  if (!S.dirLoading) S.dirLoading = (async () => {
+    try {
+      const hit = await (await caches.open('canton-dash')).match(DIR_URL());
+      if (!hit) return null;
+      const raw = await hit.json();
+      // our shortlist wins: a directory exhibitor that is already one of our suppliers opens our entry instead
+      const byName = new Map(), byBooth = new Map();
+      for (const s of S.data.suppliers || []) {
+        byName.set(normName(s.name_en), s);
+        for (const b of String(s.booth || '').split(',')) if (b.trim()) byBooth.set(`${s.phase}|${boothBase(b)}`, s);
+      }
+      const list = raw.exhibitors.map(e => { const c = (e.k || []).map(i => (raw.cats || [])[i]).filter(Boolean); return { ...e, c,
+        mine: byName.get(normName(e.n)) || e.bo.map(x => byBooth.get(`${x.p}|${boothBase(x.b)}`)).find(Boolean) || null,
+        key: [e.n, ...e.bo.map(x => `${x.b} ${x.a}`), ...c, ...(e.pr || []), ...(e.kw || []), ...(e.q || []).map(i => (raw.terms || [])[i])].join(' ').toLowerCase() }; });
+      S.dir = { list, generated: raw.generated, halls: {} };
+      return S.dir;
+    } catch (e) { return null; } finally { S.dirLoading = null; }
+  })();
+  return S.dirLoading;
+}
+const dirSeen = () => new Set(allVisits().filter(v => !v.supplier_id).map(v => normName(v.supplier_name)));
+function openDirectory(e) {
+  if (e.mine) return openForm({ supplier: e.mine });
+  const mine = allVisits().find(v => !v.supplier_id && !v.team && normName(v.supplier_name) === normName(e.n));
+  return mine ? openForm({ visit: mine }) : openForm({ directory: e });
+}
+function dirRow(e, hallKey, seen, phase) {
+  const b = e.bo.find(x => hallKey && x.b.startsWith(hallKey) && (!phase || String(x.p) === phase)) || e.bo[0];
+  const v = seen.has(normName(e.n));
+  return h('button', { class: 'result dir' + (v ? ' visited' : ''), onclick: () => openDirectory(e) },
+    h('div', { class: 'row-head' }, h('span', { class: 'booth-code' }, b.b), h('div', { class: 'booth' }, e.n)),
+    h('div', { class: 'meta' }, [`Phase ${b.p}`, b.a].filter(Boolean).join(' \u00b7 ')),
+    e.pr && e.pr.length ? h('div', { class: 'meta prods' }, e.pr.join(' \u00b7 ')) : null,
+    h('div', { class: 'tags' }, h('span', { class: 'tag dir' }, 'Fair directory'),
+      /B/.test(e.tg || '') ? h('span', { class: 'tag' }, 'Brand') : null, /A/.test(e.tg || '') ? h('span', { class: 'tag' }, 'CF Award') : null,
+      /M/.test(e.tg || '') ? h('span', { class: 'tag' }, 'Multi-session') : null, e.u >= 4 ? h('span', { class: 'tag' }, `${e.u} booths`) : null,
+      v ? h('span', { class: 'tag ok' }, 'Notes saved') : null));
+}
+// fair hits for a search: grouped by hall floor, then the top 3 per exhibit area (fair badges first, then booth size)
+function fairResults(fair, dseen) {
+  const halls = new Map(), areas = new Map();
+  for (const e of fair) {
+    for (const x of e.bo) for (const k of hallKeys(x.b)) {
+      const g = `${x.p}|${k}`;
+      if (!halls.has(g)) halls.set(g, []);
+      if (!halls.get(g).includes(e)) halls.get(g).push(e);
+    }
+    for (const a of new Set(e.bo.map(x => x.a).filter(Boolean))) { if (!areas.has(a)) areas.set(a, []); areas.get(a).push(e); }
+  }
+  const rank = (a, b) => (b.s || 0) - (a.s || 0) || (b.u || 0) - (a.u || 0);
+  const hallKeysSorted = [...halls.keys()].sort((a, b) => boothSort(a, b));
+  const areaList = [...areas.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 8);
+  return [
+    h('div', { class: 'eyebrow', id: 'r-hall' }, `Fair exhibitors not on our list - by hall (${fair.length})`),
+    hallKeysSorted.map(g => {
+      const [p, k] = g.split('|');
+      const rows = halls.get(g).slice().sort((a, b) => boothSort((a.bo.find(x => String(x.p) === p && x.b.startsWith(k)) || a.bo[0]).b, (b.bo.find(x => String(x.p) === p && x.b.startsWith(k)) || b.bo[0]).b));
+      return h('details', { class: 'hall-group' }, h('summary', {}, h('b', {}, `Hall ${k}`), ` \u00b7 Phase ${p}`, h('span', { class: 'count' }, String(rows.length))),
+        rows.slice(0, 60).map(e => dirRow(e, k, dseen, p)), rows.length > 60 ? h('div', { class: 'hint' }, 'Showing 60 - type more to narrow down.') : null);
+    }),
+    h('div', { class: 'eyebrow', id: 'r-top' }, 'Top 3 per exhibit area'),
+    h('div', { class: 'hint', style: 'margin-top:-4px' }, 'Ranked by fair badges (Brand, CF Award, multi-session), then booth size.'),
+    areaList.map(([a, list]) => h('div', { class: 'top-area' }, h('div', { class: 'section-row' }, h('b', {}, a), h('span', { class: 'hint', style: 'margin:0' }, `${list.length} match${list.length === 1 ? '' : 'es'}`)),
+      list.slice().sort(rank).slice(0, 3).map(e => dirRow(e, '', dseen)))),
+  ];
 }
 
 // ---------- photos: every format accepted; optimized copies only when the browser can decode them ----------
@@ -491,38 +574,55 @@ function viewRoute() {
 // "I'm in hall 12.2": every supplier on that hall floor, in booth order, so you can walk past them without GPS
 const hallKeys = booth => [...new Set(String(booth || '').split(',').map(hallOf).filter(Boolean).map(x => `${x.hall}.${x.floor}`))];
 const boothSort = (a, b) => String(a).localeCompare(String(b), 'en', { numeric: true });
+function dirHalls(phase) {
+  if (S.dir.halls[phase]) return S.dir.halls[phase];
+  const out = {};
+  for (const e of S.dir.list) if (!e.mine) for (const k of new Set(e.bo.filter(x => String(x.p) === phase).flatMap(x => hallKeys(x.b)))) (out[k] = out[k] || []).push(e);
+  return (S.dir.halls[phase] = out);
+}
 function viewHall() {
   const phases = [...new Set((S.data.suppliers || []).map(s => String(s.phase || '')).filter(Boolean))].sort();
   if (!S.hallPhase) S.hallPhase = String((fairDay().d || {}).phase || phases[0] || '2');
   const sups = (S.data.suppliers || []).filter(s => String(s.phase) === S.hallPhase);
   const halls = {};
   for (const s of sups) for (const k of hallKeys(s.booth)) (halls[k] = halls[k] || []).push(s);
-  const keys = Object.keys(halls).sort(boothSort);
+  const hasDir = !!store.get('dirAt');
+  const useDir = hasDir && S.hallSrc === 'all';
+  if (useDir && !S.dir) loadDirectory().then(d => { if (d) render(); });
+  const others = useDir && S.dir ? dirHalls(S.hallPhase) : {};
+  const keys = [...new Set([...Object.keys(halls), ...Object.keys(others)])].sort(boothSort);
   const seen = seenIds();
+  const dseen = useDir ? dirSeen() : new Set();
   const must = new Set((S.data.days || []).flatMap(d => d.stops.filter(x => x.must_see).map(x => String(x.id))));
   const pick = k => { S.hall = k; store.set('hall', k); render(); const on = $('.chip.on'); if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' }); };
-  const list = S.hall && halls[S.hall] ? halls[S.hall].slice().sort((a, b) => boothSort(boothIn(a.booth, S.hall), boothIn(b.booth, S.hall))) : [];
+  const inHall = k => [
+    ...(halls[k] || []).map(s => ({ b: boothIn(s.booth, k), s, v: seen.has(String(s.id)) })),
+    ...(others[k] || []).map(e => ({ b: (e.bo.find(x => String(x.p) === S.hallPhase && x.b.startsWith(k)) || e.bo[0]).b, e, v: dseen.has(normName(e.n)) })),
+  ];
+  const here = S.hall && keys.includes(S.hall);
+  const list = here ? inHall(S.hall).sort((a, b) => boothSort(a.b, b.b)) : [];
   const showAll = S.hallAll;
-  const shown = list.filter(s => showAll || !seen.has(String(s.id)));
+  const shown = list.filter(x => showAll || !x.v);
   return [
     h('div', { class: 'seg', style: 'margin-top:10px' }, phases.map(p => h('button', { class: S.hallPhase === p ? 'on' : '', onclick: () => { S.hallPhase = p; render(); } }, `Phase ${p}`))),
+    hasDir ? h('div', { class: 'seg' }, [['ours', 'Our list'], ['all', 'All exhibitors']].map(([k, l]) =>
+      h('button', { class: (S.hallSrc || 'ours') === k ? 'on' : '', onclick: () => { S.hallSrc = k; render(); } }, l))) : null,
+    useDir && !S.dir ? h('div', { class: 'empty' }, 'Loading the fair directory\u2026') : null,
     h('div', { class: 'eyebrow' }, S.hall ? 'Hall floor - swipe to change' : 'Which hall floor are you on?'),
-    h('div', { class: 'chips' + (S.hall && halls[S.hall] ? ' row' : '') }, keys.map(k => {
-      const left = halls[k].filter(s => !seen.has(String(s.id))).length;
+    h('div', { class: 'chips' + (here ? ' row' : '') }, keys.map(k => {
+      const left = inHall(k).filter(x => !x.v).length;
       return h('button', { class: 'chip' + (S.hall === k ? ' on' : ''), onclick: () => pick(k) }, h('b', {}, k), h('span', {}, left ? `${left} to see` : '\u2713'));
     })),
-    S.hall && halls[S.hall] ? [
+    here ? [
       h('div', { class: 'section-row' },
-        h('div', { class: 'eyebrow', style: 'margin:0' }, `Hall ${S.hall} \u00b7 ${list.filter(s => seen.has(String(s.id))).length} of ${list.length} visited`),
+        h('div', { class: 'eyebrow', style: 'margin:0' }, `Hall ${S.hall} \u00b7 ${list.filter(x => x.v).length} of ${list.length} visited`),
         h('button', { class: 'link', onclick: () => showHallMap(S.hall) }, svg(ICON.pin, 15), ' Hall map')),
       h('div', { class: 'seg' }, [[false, 'Not visited'], [true, 'All']].map(([k, l]) => h('button', { class: !!showAll === k ? 'on' : '', onclick: () => { S.hallAll = k; render(); } }, l))),
-      shown.map(s => {
-        const v = seen.has(String(s.id));
-        return h('button', { class: 'result' + (v ? ' visited' : ''), onclick: () => openForm({ supplier: s }) },
+      shown.slice(0, 400).map(({ s, e, v }) => e ? dirRow(e, S.hall, dseen, S.hallPhase) :
+        h('button', { class: 'result' + (v ? ' visited' : ''), onclick: () => openForm({ supplier: s }) },
           h('div', { class: 'row-head' }, h('span', { class: 'booth-code' }, boothIn(s.booth, S.hall)), h('div', { class: 'booth' }, s.name_en)),
           h('div', { class: 'meta' }, s.subcategory || s.category || ''),
-          h('div', { class: 'tags' }, must.has(String(s.id)) ? h('span', { class: 'tag' }, 'Must see') : null, supTags(s), v ? h('span', { class: 'tag ok' }, 'Notes saved') : null));
-      }),
+          h('div', { class: 'tags' }, must.has(String(s.id)) ? h('span', { class: 'tag' }, 'Must see') : null, supTags(s), v ? h('span', { class: 'tag ok' }, 'Notes saved') : null))),
       !shown.length ? h('div', { class: 'empty' }, 'Everyone on this floor has notes \u2713') : null,
     ] : h('div', { class: 'empty' }, 'Pick the hall floor you are on - you get every supplier there in booth order.'),
   ];
@@ -554,13 +654,19 @@ function resultsBox() {
   const hits = q ? all.filter(s => match([s.name_en, s.name_cn, s.booth, s.category, s.subcategory].join(' '))) : all;
   const notes = q.length >= 2 ? allVisits().filter(v => match([v.supplier_name, v.notes, v.products, v.contact_name, v.next_step, v.wechat].join(' '))).slice(0, 20) : [];
   const dash = q.length >= 2 ? (S.index || []).filter(e => match(e.h + ' ' + e.t)).slice(0, 40) : [];
+  const hasDir = !!store.get('dirAt');
+  if (q.length >= 2 && hasDir && !S.dir) loadDirectory().then(d => { if (d) renderResults(); });
+  const fair = q.length >= 2 && S.dir && S.findFilter === 'all' ? S.dir.list.filter(e => !e.mine && words.every(w => e.key.includes(w))) : [];
+  const dseen = fair.length ? dirSeen() : null;
   return h('div', { id: 'results' },
+    fair.length ? h('div', { class: 'jump' }, [['r-ours', `Our list (${hits.length})`], ['r-hall', `By hall (${fair.length})`], ['r-top', 'Top 3 per area']].map(([id, l]) =>
+      h('button', { class: 'chip', onclick: () => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, l))) : null,
     notes.length ? [h('div', { class: 'eyebrow' }, `In booth notes (${notes.length})`), notes.map(v => h('button', { class: 'result', onclick: () => openForm({ visit: v }) },
       h('div', { class: 'booth' }, v.supplier_name), h('div', { class: 'note-text' }, v.notes || v.products || '')))] : null,
     dash.length ? [h('div', { class: 'eyebrow' }, `In the dashboard (${dash.length}${dash.length === 40 ? '+' : ''})`), dash.map(e =>
       h('a', { class: 'result', href: `d/${e.p}#${e.id}`, style: 'text-decoration:none;color:inherit' },
         h('div', { class: 'meta' }, [e.pt, e.h].filter(Boolean).join(' \u203a ')), h('div', { class: 'note-text' }, e.t)))] : null,
-    h('div', { class: 'eyebrow' }, `${hits.length} supplier${hits.length === 1 ? '' : 's'}`),
+    hits.length || !fair.length ? h('div', { class: 'eyebrow', id: 'r-ours' }, `${hits.length} supplier${hits.length === 1 ? '' : 's'}`) : null,
     hits.slice(0, 80).map(s => {
       const v = visitsForSupplier(s.id).length;
       return h('button', { class: 'result', onclick: () => openForm({ supplier: s }) },
@@ -570,7 +676,10 @@ function resultsBox() {
           v ? h('span', { class: 'tag ok' }, `${v} note${v > 1 ? 's' : ''}`) : null));
     }),
     hits.length > 80 ? h('div', { class: 'hint' }, 'Showing the first 80 - type to narrow down.') : null,
-    q && !hits.length ? h('div', { class: 'empty' }, 'No match - add them as a new supplier below.') : null);
+    fair.length ? [fairResults(fair.slice(0, 600), dseen),
+      fair.length > 600 ? h('div', { class: 'hint' }, `${fair.length} matches - showing the first 600. Type more to narrow down.`) : null] : null,
+    q.length >= 2 && !hasDir ? h('div', { class: 'hint' }, 'Looking for a booth that is not on our list? Download the fair directory in Guide to search every Phase 2 and 3 exhibitor.') : null,
+    q && !hits.length && !fair.length ? h('div', { class: 'empty' }, 'No match - add them as a new supplier below.') : null);
 }
 
 // ---------- guide: desktop dashboard tabs (stored on the phone), booth questions, tools ----------
@@ -589,6 +698,13 @@ function viewGuide() {
     catch (e) { toast(e.net ? 'No connection - try again on Wi-Fi, roaming or VPN' : e.message); }
     render();
   } }, svg(ICON.sync, 18), at ? 'Update guide pages' : 'Download guide pages');
+  const dirAt = store.get('dirAt');
+  const dirBtn = h('button', { class: 'btn' + (dirAt ? ' ghost' : ''), onclick: async () => {
+    dirBtn.disabled = true; dirBtn.textContent = 'Downloading\u2026';
+    try { const d = await downloadDirectory(); toast(d ? `${d.list.length.toLocaleString()} exhibitors saved on this phone` : 'Could not open the directory'); }
+    catch (e) { toast(e.net ? 'No connection - try again on Wi-Fi, roaming or VPN' : e.message); }
+    render();
+  } }, svg(ICON.sync, 18), dirAt ? 'Update directory' : 'Download directory');
   const page = file => DASH_PAGES.find(p => p[0] === file);
   const qs = (S.data.questions || {}).screen || [];
   return [
@@ -604,6 +720,12 @@ function viewGuide() {
       h('div', { class: 'hint' }, at ? `Saved \u00b7 built ${at}. Works without internet.` : 'Download once (about 2 MB) while you have internet - after that every page, map and route works offline.'),
       !ready ? h('div', { class: 'hint', style: 'color:var(--warn)' }, 'Close and reopen the app once to finish installing offline mode.') : null,
       h('div', { style: 'margin-top:12px' }, dl)),
+    h('div', { class: 'card' },
+      h('div', { class: 'section-title' }, 'Fair exhibitor directory'),
+      h('div', { class: 'hint' }, dirAt ? `${Number(store.get('dirCount') || 0).toLocaleString()} Phase 2 & 3 exhibitors saved \u00b7 ${dirAt}. Search and By hall \u2192 All exhibitors work offline.`
+        : 'Every Phase 2 and 3 exhibitor (about 5 MB). Download once on Wi-Fi - then search any booth and take notes on it, offline.'),
+      h('div', { class: 'hint' }, 'Kept separate: our shortlist, itinerary and route never change.'),
+      h('div', { style: 'margin-top:12px' }, dirBtn)),
   ];
 }
 
@@ -638,7 +760,7 @@ function noteCard(v) {
       ph ? h('span', { class: 'tag' }, `${ph} photo${ph > 1 ? 's' : ''}`) : null,
       vn ? h('span', { class: 'tag' }, `${vn} voice note${vn > 1 ? 's' : ''}`) : null,
       inDrive ? h('span', { class: 'tag' }, `${inDrive} file${inDrive > 1 ? 's' : ''} in Drive`) : null,
-      !v.supplier_id ? h('span', { class: 'tag warn' }, 'New supplier') : null,
+      !v.supplier_id ? h('span', { class: 'tag warn' }, v.on_list === 'directory' ? 'Fair directory' : 'New supplier') : null,
       v.sync === 'synced' ? null : h('span', { class: 'tag ' + (v.sync === 'error' ? 'bad' : 'warn') }, v.sync === 'error' ? 'Upload problem' : 'Waiting to upload')));
 }
 const isHot = v => v.hot === '1' || v.hot === 1 || v.hot === true;
@@ -822,7 +944,7 @@ function converter(onUse) {
 // ---------- the booth form ----------
 const TEXT_FIELDS = ['contact_name', 'wechat', 'phone', 'email', 'products', 'notes', 'fob_price', 'moq', 'lead_time', 'next_step', 'new_name', 'new_booth', 'new_category'];
 
-async function openForm({ supplier, visit, draft: fromDraft }) {
+async function openForm({ supplier, visit, draft: fromDraft, directory }) {
   if (visit && visit.team) {
     // a teammate's note: open my own note for that supplier, or show theirs read-only for a new supplier
     const s = visit.supplier_id ? supplierById(visit.supplier_id) : null;
@@ -844,6 +966,11 @@ async function openForm({ supplier, visit, draft: fromDraft }) {
     photos: (await DB.photosOf(client_id)).filter(p => p.sync !== 'discarded'),
   };
   if (!sup && existing && !draft) Object.assign(f.values, { new_name: existing.supplier_name, new_booth: existing.booth, new_category: existing.category });
+  if (directory && !existing && !draft) {
+    const b = directory.bo[0] || {};
+    Object.assign(f.values, { new_name: directory.n, new_booth: directory.bo.map(x => x.b).join(', '), new_category: b.a || (directory.c || [])[0] || '', _dir: directory.id });
+    f.phase = String(b.p || '');
+  }
   S.form = f;
   renderForm();
   if (draft) toast('Restored your unsaved notes');
@@ -876,11 +1003,13 @@ function renderForm() {
           sup.canada_must_see ? h('span', { class: 'tag ca' }, 'Canada ' + sup.canada_must_see) : null),
         sup.next_action ? h('div', { class: 'ask' }, h('b', {}, 'Ask / check: '), sup.next_action) : null,
         hallOf(sup.booth) ? h('button', { class: 'btn ghost', style: 'margin-top:10px', onclick: () => showHallMap(sup.booth) }, `Hall ${hallOf(sup.booth).hall} map \u00b7 where is this booth?`) : null)
-      : h('div', { class: 'card' }, h('div', { class: 'section-title' }, 'New supplier'),
+      : h('div', { class: 'card' }, h('div', { class: 'section-title' }, v._dir || (f.existing && f.existing.on_list === 'directory') ? 'From the fair directory' : 'New supplier'),
+        v._dir ? h('div', { class: 'hint' }, 'Not on our list - your notes are saved as a separate fair-directory note.') : null,
         field('Company name *', 'new_name', { autocomplete: 'organization' }),
         h('div', { class: 'grid2' }, h('div', {}, field('Booth', 'new_booth', { placeholder: 'e.g. 12.2A19' })),
           h('div', {}, h('label', { class: 'f' }, 'Phase'), seg('phase_new', [['2', 'Phase 2'], ['3', 'Phase 3']], f.phase, x => { f.phase = x; setVal('phase', x); }))),
-        field('Category / products', 'new_category')),
+        field('Category / products', 'new_category'),
+        hallOf(v.new_booth) ? h('button', { class: 'btn ghost', style: 'margin-top:10px', onclick: () => showHallMap(v.new_booth) }, `Hall ${hallOf(v.new_booth).hall} map \u00b7 where is this booth?`) : null),
       captureCard(f),
       h('div', { class: 'card' },
         h('div', { class: 'section-title' }, 'Contact'),
@@ -1461,7 +1590,7 @@ async function saveForm(opts = {}) {
     ...(f.existing && !f.existing.team ? f.existing : {}),
     client_id: f.client_id, saved_at: (f.existing && f.existing.saved_at) || stamp(), updated_local: new Date().toISOString(),
     recorded_by: (f.existing && f.existing.recorded_by) || S.who,
-    supplier_id: sup ? sup.id : '', supplier_name: name, on_list: sup ? (sup.shortlist ? 'shortlist' : 'backup') : 'new',
+    supplier_id: sup ? sup.id : '', supplier_name: name, on_list: sup ? (sup.shortlist ? 'shortlist' : 'backup') : (v._dir || (f.existing && f.existing.on_list === 'directory') ? 'directory' : 'new'),
     phase: f.phase || '', booth: sup ? (sup.booth || '') : String(v.new_booth || '').trim(), category: sup ? (sup.subcategory || sup.category || '') : String(v.new_category || '').trim(),
     status: v.status || 'visited', rating: v.rating || '', sample: v.sample || 'none', hot: isHot(v) ? '1' : '', sync: 'pending', error: '',
   };

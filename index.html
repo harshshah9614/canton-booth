@@ -165,6 +165,17 @@ textarea.i { min-height:170px; resize:vertical; line-height:1.5; }
 .row-head { display:flex; align-items:baseline; gap:10px; }
 .booth-code { flex:none; font-weight:800; color:var(--acc); font-size:14px; min-width:64px; }
 .result.visited, .stop.visited { opacity:.62; }
+.result.dir { border-style:dashed; } .tag.dir { background:var(--surface-2); color:var(--mut); border:1px solid var(--line); }
+.meta.prods { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hall-group { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); margin:8px 0; }
+.hall-group > summary { padding:12px 14px; cursor:pointer; list-style:none; display:flex; align-items:center; gap:6px; }
+.hall-group > summary::-webkit-details-marker { display:none; }
+.hall-group > summary .count { margin-left:auto; background:var(--acc-2); color:var(--acc); border-radius:999px; padding:1px 10px; font-weight:600; font-size:13px; }
+.hall-group[open] > summary { border-bottom:1px solid var(--line); }
+.hall-group > .result { margin:8px; }
+.top-area { margin:8px 0 14px; } .top-area .section-row { margin:0 2px 6px; }
+.jump { display:flex; gap:8px; overflow-x:auto; margin:10px 0 2px; scrollbar-width:none; } .jump .chip { flex:0 0 auto; }
+#r-ours, #r-hall, #r-top { scroll-margin-top:80px; }
 .note-card.draft { border-left:4px solid var(--warn); }
 .guide-link { text-decoration:none; color:inherit; } .guide-link.off { opacity:.55; }
 .result.qref > summary { display:flex; align-items:center; }
