@@ -2,7 +2,7 @@
 /* Canton booth app - offline-first PWA. Everything is saved on the phone first (IndexedDB), then uploaded to the
    team's Google Drive (Apps Script backend in config.js) whenever there is internet. */
 
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 const API = ((window.BOOTH_CONFIG || {}).api || '').trim();
 const OPTIMIZE_MAX = 2560;           // longest side for "Optimized" uploads
 const OPTIMIZE_OVER = 1.5 * 1024 * 1024;
@@ -46,6 +46,15 @@ const ICON = {
   image: ['M3 5h18v14H3z', 'M8 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z', 'M21 16l-5-5L5 19'],
   mic: ['M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z', 'M19 10v2a7 7 0 0 1-14 0v-2', 'M12 19v3'],
   audio: ['M9 18V5l12-2v13', 'M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M18 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
+  home: ['M3 11l9-8 9 8', 'M5 10v10h5v-6h4v6h5V10'], user: ['M20 21a8 8 0 0 0-16 0', 'M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10z'],
+  check: ['M9 11l3 3 8-8', 'M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9'],
+  book: ['M4 19.5A2.5 2.5 0 0 1 6.5 17H20', 'M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z'],
+  pin: ['M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z', 'M12 11.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z'],
+  flame: ['M12 2c1 3.5 5 6 5 11a5 5 0 0 1-10 0c0-2.5 1.5-4.5 3-5.5 0 2 1 3 2 3 0-3-1-6 0-8.5z'],
+  phone: ['M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z'],
+  mail: ['M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', 'M22 6l-10 7L2 6'],
+  copy: ['M9 9h11v11H9z', 'M5 15H4V4h11v1'], download: ['M12 3v12', 'M7 10l5 5 5-5', 'M5 21h14'],
+  share: ['M4 12v8h16v-8', 'M12 3v12', 'M7 8l5-5 5 5'],
 };
 const DASH_PAGES = [
   ['cc.html', 'Command Centre', 'Shortlist by walking order, venue maps, routes, Alibaba / 365 summary'],
@@ -115,7 +124,7 @@ async function dropPhoto(id) {
 const S = {
   pass: store.get('pass'), who: store.get('who'), quality: store.get('quality') || 'optimized',
   data: store.json('data'), team: store.json('team') || [], lastSync: store.get('lastSync'), lastError: '',
-  tab: 'plan', day: null, find: '', findFilter: 'all', notesFilter: 'all',
+  tab: 'today', day: null, find: '', findFilter: 'all', notesFilter: 'all', hall: store.get('hall'),
   visits: [], photos: [], syncing: false, form: null,
 };
 
@@ -144,8 +153,9 @@ function hallOf(booth) { const m = /^\s*(\d{1,2})\.(\d)/.exec(booth || ''); retu
 function showHallMap(booth) {
   const hf = hallOf(booth);
   if (!hf) return;
+  const code = String(booth).split(',')[0].trim();
   const ed = h('div', { class: 'editor' },
-    h('div', { class: 'row' }, h('b', {}, `Hall ${hf.hall} \u00b7 floor ${hf.floor} \u00b7 booth ${String(booth).split(',')[0]}`),
+    h('div', { class: 'row' }, h('b', {}, `Hall ${hf.hall} \u00b7 floor ${hf.floor}${/[a-z]/i.test(code) ? ' \u00b7 booth ' + code : ''}`),
       h('button', { class: 'btn', style: 'width:auto;padding:9px 16px', onclick: () => ed.remove() }, 'Close')),
     h('div', { style: 'flex:1;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y pinch-zoom;padding-top:10px' },
       h('img', { src: `static/hall_maps/hall_${hf.hall}.svg`, alt: `Hall ${hf.hall} map`, style: 'width:100%;height:auto;background:#fff;border-radius:10px',
@@ -197,7 +207,7 @@ function blobToBase64(blob) {
 
 function visitPayload(v) {
   const keys = ['client_id', 'saved_at', 'recorded_by', 'supplier_id', 'supplier_name', 'on_list', 'phase', 'booth', 'category', 'status',
-    'rating', 'contact_name', 'wechat', 'phone', 'email', 'products', 'notes', 'fob_price', 'moq', 'lead_time', 'sample', 'next_step'];
+    'rating', 'contact_name', 'wechat', 'phone', 'email', 'products', 'notes', 'fob_price', 'moq', 'lead_time', 'sample', 'next_step', 'hot'];
   return Object.fromEntries(keys.map(k => [k, v[k] == null ? '' : v[k]]));
 }
 
@@ -360,67 +370,109 @@ function renderStatus() { const old = $('#sync'); if (old) old.replaceWith(statu
 
 function render() {
   if (!S.pass || !S.who || !S.data) return renderWelcome();
-  const titles = { plan: 'Itinerary', find: 'Search', notes: 'Booth notes', dash: 'Dashboard' };
+  const views = { today: viewToday, booths: viewBooths, contacts: viewContacts, follow: viewFollow, guide: viewGuide };
+  if (!views[S.tab]) S.tab = 'today';
   put(root,
-    h('header', { class: 'top' }, h('h1', {}, titles[S.tab]), statusChip(),
+    h('header', { class: 'top' }, h('h1', {}, TABS.find(t => t[0] === S.tab)[1]), statusChip(),
       h('button', { class: 'icon-btn', onclick: openSettings, 'aria-label': 'Settings' }, svg(ICON.gear, 20))),
-    h('main', {}, S.tab === 'plan' ? viewPlan() : S.tab === 'find' ? viewFind() : S.tab === 'dash' ? viewDash() : viewNotes()),
-    h('nav', { class: 'tabs' },
-      tabBtn('dash', 'Dashboard', ICON.grid), tabBtn('plan', 'Itinerary', ICON.route),
-      h('button', { class: 'fab', onclick: () => openForm({}), 'aria-label': 'New supplier note' }, svg(ICON.plus, 26)),
-      tabBtn('find', 'Search', ICON.search), tabBtn('notes', 'Notes', ICON.notes)));
+    h('main', {}, views[S.tab]()),
+    h('nav', { class: 'tabs' }, TABS.map(([id, label, icon]) => tabBtn(id, label, icon))));
 }
+const TABS = [['today', 'Today', ICON.home], ['booths', 'Booths', ICON.booth], ['contacts', 'Contacts', ICON.user],
+  ['follow', 'Follow-ups', ICON.check], ['guide', 'Guide', ICON.book]];
 function tabBtn(id, label, icon) {
-  return h('button', { class: 'tab' + (S.tab === id ? ' on' : ''), onclick: () => { S.tab = id; render(); window.scrollTo(0, 0); } }, svg(icon, 22), label);
+  return h('button', { class: 'tab' + (S.tab === id ? ' on' : ''), onclick: () => go(id) }, svg(icon, 22), label);
+}
+function go(tab, sub) {
+  S.tab = tab;
+  if (sub) Object.assign(S, sub);
+  render(); window.scrollTo(0, 0);
+}
+function segNav(key, opts) {
+  return h('div', { class: 'seg seg-nav' }, opts.map(([k, l]) => h('button', { class: S[key] === k ? 'on' : '', onclick: () => { S[key] = k; render(); } }, l)));
 }
 
-// ---------- itinerary ----------
-function nowNext() {
+// ---------- today ----------
+function fairDay() {
   const days = S.data.days || [];
-  const today = stamp().slice(0, 10), now = stamp().slice(11);
-  const d = days.find(x => x.date === today);
-  if (!d) {
-    const next = days.find(x => x.date > today);
-    if (!next) return null;
-    const n = Math.round((new Date(next.date) - new Date(today)) / 86400000);
-    return h('div', { class: 'card now' }, h('div', { class: 'eyebrow', style: 'margin:0 0 4px' }, 'Next walking day'),
-      h('div', { class: 'booth' }, `${next.label} \u00b7 ${next.display_date}`), h('div', { class: 'meta' }, `in ${n} day${n === 1 ? '' : 's'} \u00b7 ${next.count} stops \u00b7 ${next.hall_span}`));
-  }
-  const seen = new Set(allVisits().map(v => String(v.supplier_id)));
-  const s = d.stops.find(x => !seen.has(String(x.id)) && (x.time_end || '99') >= now) || d.stops.find(x => !seen.has(String(x.id)));
-  if (!s) return h('div', { class: 'card now' }, h('div', { class: 'booth' }, 'All stops for today have notes \u2713'));
-  return h('button', { class: 'card now stop', onclick: () => openForm({ supplier: { ...supplierById(s.id), ...s, phase: d.phase } }) },
-    h('div', { class: 'when' }, h('b', {}, s.time_start || ''), h('div', { class: 'num' }, s.seq)),
-    h('div', { class: 'body' }, h('div', { class: 'eyebrow', style: 'margin:0 0 2px' }, 'Next stop'),
-      h('div', { class: 'booth' }, (s.booth || '').split(',')[0]), h('div', { class: 'name' }, s.name_en),
-      h('div', { class: 'meta' }, [s.walk_from_prev ? `~${s.walk_from_prev} min walk from the previous stop` : '', s.subcategory || s.category].filter(Boolean).join(' \u00b7 '))));
+  const today = stamp().slice(0, 10);
+  let i = days.findIndex(x => x.date === today);
+  if (i < 0) i = days.findIndex(x => x.date > today);
+  if (i < 0) i = days.length - 1;
+  return { i, d: days[i], isToday: !!days[i] && days[i].date === today, inDays: days[i] ? Math.round((new Date(days[i].date) - new Date(today)) / 86400000) : 0 };
+}
+const seenIds = () => new Set(allVisits().filter(v => v.supplier_id).map(v => String(v.supplier_id)));
+const openStop = (s, d) => openForm({ supplier: { ...supplierById(s.id), ...s, phase: d.phase } });
+function stopRow(s, d, seen) {
+  const v = seen.has(String(s.id));
+  return h('button', { class: 'stop' + (v ? ' visited' : ''), onclick: () => openStop(s, d) },
+    h('div', { class: 'when' }, h('b', {}, s.time_start || ''), h('div', { class: 'num' + (v ? ' done' : '') }, v ? '\u2713' : s.seq)),
+    h('div', { class: 'body' }, h('div', { class: 'booth' }, (s.booth || 'Booth TBC').split(',')[0]), h('div', { class: 'name' }, s.name_en),
+      h('div', { class: 'meta' }, s.subcategory || s.category || ''),
+      h('div', { class: 'tags' }, s.must_see ? h('span', { class: 'tag' }, 'Must see') : null,
+        s.canada_must_see ? h('span', { class: 'tag ca' }, 'Canada ' + s.canada_must_see) : null,
+        v ? h('span', { class: 'tag ok' }, 'Notes saved') : null)));
+}
+function viewToday() {
+  const { d, isToday, inDays } = fairDay();
+  const saved = new Set(S.visits.map(v => v.client_id));
+  const open = drafts().filter(x => !saved.has(x.client_id));
+  const tiles = h('div', { class: 'tiles home-tiles' },
+    h('button', { class: 'tile', onclick: () => openForm({}) }, svg(ICON.plus, 24), 'New supplier'),
+    h('button', { class: 'tile', onclick: () => go('booths', { boothsView: 'hall' }) }, svg(ICON.pin, 24), S.hall ? `In hall ${S.hall}` : "I'm in a hall"),
+    h('button', { class: 'tile', onclick: () => go('contacts') }, svg(ICON.user, 24), 'Contacts'),
+    h('button', { class: 'tile', onclick: () => go('follow', { followView: 'summary' }) }, svg(ICON.check, 24), 'Day summary'));
+  const draftCards = open.length ? [h('div', { class: 'eyebrow' }, 'Unsaved drafts'), open.map(x => h('button', { class: 'note-card draft', onclick: () => openForm({ draft: x }) },
+    h('div', { class: 'booth' }, x._name || x.new_name || 'New supplier'), h('div', { class: 'meta' }, 'Tap to finish and save')))] : null;
+  if (!d) return [draftCards, tiles, h('div', { class: 'empty' }, 'No itinerary loaded yet.')];
+  const seen = seenIds();
+  const done = d.stops.filter(s => seen.has(String(s.id))).length;
+  const left = d.stops.filter(s => !seen.has(String(s.id)));
+  const now = stamp().slice(11);
+  const next = (isToday && left.find(s => (s.time_end || '99') >= now)) || left[0];
+  return [
+    draftCards,
+    h('div', { class: 'card day-card' },
+      h('div', { class: 'eyebrow', style: 'margin:0 0 2px' }, isToday ? 'Today' : inDays > 0 ? `Next walking day \u00b7 in ${inDays} day${inDays === 1 ? '' : 's'}` : 'Last walking day'),
+      h('div', { class: 'day-title' }, `${d.label} \u00b7 ${d.display_date}`),
+      h('div', { class: 'bar big' }, h('i', { style: `width:${d.count ? Math.round(100 * done / d.count) : 0}%` })),
+      h('div', { class: 'meta' }, `${done} of ${d.count} stops visited \u00b7 ${d.hall_span}`)),
+    next ? h('div', { class: 'card next-card' },
+      h('div', { class: 'eyebrow', style: 'margin:0 0 4px' }, `Next stop \u00b7 ${next.time_start || ''}`),
+      h('div', { class: 'next-booth' }, (next.booth || 'Booth TBC').split(',')[0]),
+      h('div', { class: 'name' }, next.name_en),
+      h('div', { class: 'meta' }, [next.walk_from_prev ? `~${next.walk_from_prev} min walk` : '', next.subcategory || next.category].filter(Boolean).join(' \u00b7 ')),
+      next.next_action ? h('div', { class: 'ask' }, h('b', {}, 'Ask / check: '), next.next_action) : null,
+      h('div', { class: 'btn-row' },
+        h('button', { class: 'btn', onclick: () => openStop(next, d) }, svg(ICON.camera, 18), 'Capture at this booth'),
+        hallOf(next.booth) ? h('button', { class: 'btn ghost', onclick: () => showHallMap(next.booth) }, svg(ICON.pin, 18), 'Map') : null))
+      : h('div', { class: 'card next-card' }, h('div', { class: 'booth' }, 'Every stop on this day has notes \u2713')),
+    tiles,
+    left.length > 1 ? [h('div', { class: 'eyebrow' }, `Still to visit (${left.length})`), left.filter(s => s !== next).map(s => stopRow(s, d, seen))] : null,
+  ];
 }
 
-function viewPlan() {
+// ---------- booths: route, by hall, search ----------
+function viewBooths() {
+  const view = S.boothsView || 'route';
+  return [segNav('boothsView', [['route', 'Route'], ['hall', 'By hall'], ['search', 'Search']]),
+    view === 'hall' ? viewHall() : view === 'search' ? viewFind() : viewRoute()];
+}
+
+function viewRoute() {
   const days = S.data.days || [];
-  if (S.day == null) {
-    const today = stamp().slice(0, 10);
-    S.day = Math.max(0, days.findIndex(d => d.date === today));
-  }
+  if (S.day == null) S.day = Math.max(0, fairDay().i);
   const d = days[S.day];
   if (!d) return h('div', { class: 'empty' }, 'No itinerary loaded yet.');
-  const seen = new Set(allVisits().map(v => String(v.supplier_id)));
+  const seen = seenIds();
   const done = d.stops.filter(s => seen.has(String(s.id))).length;
   const list = [];
   d.stops.forEach((s, i) => {
     if (i && s.walk_from_prev) list.push(h('div', { class: 'walk' }, `\u2193 ~${s.walk_from_prev} min walk`));
-    const v = seen.has(String(s.id));
-    list.push(h('button', { class: 'stop', onclick: () => openForm({ supplier: { ...supplierById(s.id), ...s, phase: d.phase } }) },
-      h('div', { class: 'when' }, h('b', {}, s.time_start || ''), h('div', { class: 'num' + (v ? ' done' : '') }, v ? '\u2713' : s.seq)),
-      h('div', { class: 'body' }, h('div', { class: 'booth' }, (s.booth || 'Booth TBC').split(',')[0]), h('div', { class: 'name' }, s.name_en),
-        h('div', { class: 'meta' }, s.subcategory || s.category || ''),
-        h('div', { class: 'tags' }, s.must_see ? h('span', { class: 'tag' }, 'Must see') : null,
-          s.canada_must_see ? h('span', { class: 'tag ca' }, 'Canada ' + s.canada_must_see) : null,
-          v ? h('span', { class: 'tag ok' }, 'Notes saved') : null))));
+    list.push(stopRow(s, d, seen));
     if (s.lunch_after) list.push(h('div', { class: 'lunch' }, 'Lunch break 12:30 \u2013 13:30'));
   });
   return [
-    nowNext(),
     h('div', { class: 'days' }, days.map((x, i) => {
       const n = x.stops.filter(s => seen.has(String(s.id))).length;
       return h('button', { class: 'day' + (i === S.day ? ' on' : ''), onclick: () => { S.day = i; render(); } },
@@ -435,6 +487,47 @@ function viewPlan() {
     list,
   ];
 }
+
+// "I'm in hall 12.2": every supplier on that hall floor, in booth order, so you can walk past them without GPS
+const hallKeys = booth => [...new Set(String(booth || '').split(',').map(hallOf).filter(Boolean).map(x => `${x.hall}.${x.floor}`))];
+const boothSort = (a, b) => String(a).localeCompare(String(b), 'en', { numeric: true });
+function viewHall() {
+  const phases = [...new Set((S.data.suppliers || []).map(s => String(s.phase || '')).filter(Boolean))].sort();
+  if (!S.hallPhase) S.hallPhase = String((fairDay().d || {}).phase || phases[0] || '2');
+  const sups = (S.data.suppliers || []).filter(s => String(s.phase) === S.hallPhase);
+  const halls = {};
+  for (const s of sups) for (const k of hallKeys(s.booth)) (halls[k] = halls[k] || []).push(s);
+  const keys = Object.keys(halls).sort(boothSort);
+  const seen = seenIds();
+  const must = new Set((S.data.days || []).flatMap(d => d.stops.filter(x => x.must_see).map(x => String(x.id))));
+  const pick = k => { S.hall = k; store.set('hall', k); render(); const on = $('.chip.on'); if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' }); };
+  const list = S.hall && halls[S.hall] ? halls[S.hall].slice().sort((a, b) => boothSort(boothIn(a.booth, S.hall), boothIn(b.booth, S.hall))) : [];
+  const showAll = S.hallAll;
+  const shown = list.filter(s => showAll || !seen.has(String(s.id)));
+  return [
+    h('div', { class: 'seg', style: 'margin-top:10px' }, phases.map(p => h('button', { class: S.hallPhase === p ? 'on' : '', onclick: () => { S.hallPhase = p; render(); } }, `Phase ${p}`))),
+    h('div', { class: 'eyebrow' }, S.hall ? 'Hall floor - swipe to change' : 'Which hall floor are you on?'),
+    h('div', { class: 'chips' + (S.hall && halls[S.hall] ? ' row' : '') }, keys.map(k => {
+      const left = halls[k].filter(s => !seen.has(String(s.id))).length;
+      return h('button', { class: 'chip' + (S.hall === k ? ' on' : ''), onclick: () => pick(k) }, h('b', {}, k), h('span', {}, left ? `${left} to see` : '\u2713'));
+    })),
+    S.hall && halls[S.hall] ? [
+      h('div', { class: 'section-row' },
+        h('div', { class: 'eyebrow', style: 'margin:0' }, `Hall ${S.hall} \u00b7 ${list.filter(s => seen.has(String(s.id))).length} of ${list.length} visited`),
+        h('button', { class: 'link', onclick: () => showHallMap(S.hall) }, svg(ICON.pin, 15), ' Hall map')),
+      h('div', { class: 'seg' }, [[false, 'Not visited'], [true, 'All']].map(([k, l]) => h('button', { class: !!showAll === k ? 'on' : '', onclick: () => { S.hallAll = k; render(); } }, l))),
+      shown.map(s => {
+        const v = seen.has(String(s.id));
+        return h('button', { class: 'result' + (v ? ' visited' : ''), onclick: () => openForm({ supplier: s }) },
+          h('div', { class: 'row-head' }, h('span', { class: 'booth-code' }, boothIn(s.booth, S.hall)), h('div', { class: 'booth' }, s.name_en)),
+          h('div', { class: 'meta' }, s.subcategory || s.category || ''),
+          h('div', { class: 'tags' }, must.has(String(s.id)) ? h('span', { class: 'tag' }, 'Must see') : null, supTags(s), v ? h('span', { class: 'tag ok' }, 'Notes saved') : null));
+      }),
+      !shown.length ? h('div', { class: 'empty' }, 'Everyone on this floor has notes \u2713') : null,
+    ] : h('div', { class: 'empty' }, 'Pick the hall floor you are on - you get every supplier there in booth order.'),
+  ];
+}
+const boothIn = (booth, key) => String(booth || '').split(',').map(x => x.trim()).find(x => x.startsWith(key)) || String(booth || '').split(',')[0];
 
 // ---------- suppliers ----------
 function viewFind() {
@@ -480,32 +573,43 @@ function resultsBox() {
     q && !hits.length ? h('div', { class: 'empty' }, 'No match - add them as a new supplier below.') : null);
 }
 
-// ---------- dashboard (read-only copies of the desktop tabs, stored on the phone) ----------
-function viewDash() {
+// ---------- guide: desktop dashboard tabs (stored on the phone), booth questions, tools ----------
+const GUIDE = [
+  ['At the booth', ['toolkit.html']],
+  ['Research', ['opportunities.html', 'canada.html', 'alibaba.html']],
+  ['Plan', ['cc.html', 'itinerary.html', 'fair-map.html', 'factory-visits.html']],
+  ['After hours', ['restaurants.html']],
+];
+function viewGuide() {
   const at = store.get('pagesAt');
   const ready = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
   const dl = h('button', { class: 'btn' + (at ? ' ghost' : ''), onclick: async () => {
     dl.disabled = true; dl.textContent = 'Downloading\u2026';
-    try { await downloadDashboard(); toast('Dashboard saved on this phone'); }
+    try { await downloadDashboard(); toast('Guide saved on this phone'); }
     catch (e) { toast(e.net ? 'No connection - try again on Wi-Fi, roaming or VPN' : e.message); }
     render();
-  } }, svg(ICON.sync, 18), at ? 'Update dashboard' : 'Download dashboard');
+  } }, svg(ICON.sync, 18), at ? 'Update guide pages' : 'Download guide pages');
+  const page = file => DASH_PAGES.find(p => p[0] === file);
+  const qs = (S.data.questions || {}).screen || [];
   return [
+    GUIDE.map(([group, files]) => [h('div', { class: 'eyebrow' }, group),
+      group === 'At the booth' && qs.length ? h('details', { class: 'result qref' }, h('summary', {}, 'Booth questions', h('span', { class: 'hint', style: 'margin:0 0 0 6px' }, `${qs.length} for a 10-minute screen`)),
+        h('ol', {}, qs.map(q => h('li', {}, q)))) : null,
+      files.map(page).filter(Boolean).map(([file, title, desc]) => h('a', { class: 'result guide-link' + (at ? '' : ' off'), href: 'd/' + file },
+        h('div', { class: 'booth' }, title), h('div', { class: 'meta' }, desc)))]),
+    h('div', { class: 'eyebrow' }, 'Tools'),
+    h('div', { class: 'card' }, h('div', { class: 'section-title' }, 'Price converter'), converter()),
     h('div', { class: 'card' },
-      h('div', { class: 'section-title' }, 'Desktop dashboard, offline'),
-      h('div', { class: 'hint' }, at ? `Saved on this phone \u00b7 built ${at}. Works without internet. Tap a supplier name in any tab to open its booth notes.`
-        : 'Download once (about 2 MB) while you have internet - after that every tab, map and route works offline.'),
+      h('div', { class: 'section-title' }, 'Guide pages on this phone'),
+      h('div', { class: 'hint' }, at ? `Saved \u00b7 built ${at}. Works without internet.` : 'Download once (about 2 MB) while you have internet - after that every page, map and route works offline.'),
       !ready ? h('div', { class: 'hint', style: 'color:var(--warn)' }, 'Close and reopen the app once to finish installing offline mode.') : null,
       h('div', { style: 'margin-top:12px' }, dl)),
-    DASH_PAGES.map(([file, title, desc]) => h('a', { class: 'result', href: 'd/' + file, style: 'text-decoration:none;color:inherit' + (at ? '' : ';opacity:.55') },
-      h('div', { class: 'booth' }, title), h('div', { class: 'meta' }, desc))),
   ];
 }
 
 // ---------- notes ----------
 function viewNotes() {
-  const followUp = v => !!(v.next_step || v.sample === 'requested' || v.status === 'revisit');
-  const list = allVisits().filter(v => S.notesFilter === 'all' || (S.notesFilter === 'mine' ? !v.team : S.notesFilter === 'follow' ? followUp(v) : v.team))
+  const list = allVisits().filter(v => S.notesFilter === 'all' || (S.notesFilter === 'mine' ? !v.team : v.team))
     .sort((a, b) => String(b.updated_local || b.updated_at || b.saved_at).localeCompare(String(a.updated_local || a.updated_at || a.saved_at)));
   const saved = new Set(S.visits.map(v => v.client_id));
   const open = drafts().filter(d => !saved.has(d.client_id));
@@ -514,30 +618,205 @@ function viewNotes() {
       h('div', { class: 'booth' }, d._name || d.new_name || 'New supplier'),
       d.notes ? h('div', { class: 'note-text' }, d.notes) : null,
       h('div', { class: 'tags' }, h('span', { class: 'tag warn' }, 'Draft - tap to finish and save'))))] : null,
-    h('div', { class: 'seg' }, [['all', 'Everyone'], ['mine', 'Mine'], ['team', 'Team'], ['follow', 'Follow-ups']].map(([k, l]) =>
+    h('div', { class: 'seg', style: 'margin-top:10px' }, [['all', 'Everyone'], ['mine', 'Mine'], ['team', 'Team']].map(([k, l]) =>
       h('button', { class: S.notesFilter === k ? 'on' : '', onclick: () => { S.notesFilter = k; render(); } }, l))),
-    list.length ? list.map(v => {
-      const files = S.photos.filter(p => p.client_id === v.client_id);
-      const vn = files.filter(p => p.kind === 'voice').length;
-      const ph = files.length - vn;
-      const inDrive = files.length ? 0 : Number(v.photos || 0);   // a teammate's note: Drive counts photos and voice notes together
-      return h('button', { class: 'note-card', onclick: () => openForm({ visit: v }) },
-        h('div', { class: 'booth' }, v.supplier_name),
-        h('div', { class: 'meta' }, [v.booth && String(v.booth).split(',')[0], v.recorded_by, v.saved_at].filter(Boolean).join(' \u00b7 ')),
-        v.notes ? h('div', { class: 'note-text' }, v.notes) : null,
-        h('div', { class: 'tags' }, statusTag(v.status), v.rating ? h('span', { class: 'tag' }, '\u2605'.repeat(Number(v.rating))) : null,
-          v.next_step ? h('span', { class: 'tag warn' }, 'Next: ' + String(v.next_step).slice(0, 40)) : null,
-          v.sample === 'requested' ? h('span', { class: 'tag warn' }, 'Sample requested') : null,
-          ph ? h('span', { class: 'tag' }, `${ph} photo${ph > 1 ? 's' : ''}`) : null,
-          vn ? h('span', { class: 'tag' }, `${vn} voice note${vn > 1 ? 's' : ''}`) : null,
-          inDrive ? h('span', { class: 'tag' }, `${inDrive} file${inDrive > 1 ? 's' : ''} in Drive`) : null,
-          !v.supplier_id ? h('span', { class: 'tag warn' }, 'New supplier') : null,
-          v.sync === 'synced' ? null : h('span', { class: 'tag ' + (v.sync === 'error' ? 'bad' : 'warn') }, v.sync === 'error' ? 'Upload problem' : 'Waiting to upload')));
-    }) : h('div', { class: 'empty' }, 'No booth notes yet. Tap a stop in the itinerary or the + button.'),
+    list.length ? list.map(noteCard) : h('div', { class: 'empty' }, 'No booth notes yet. Open a stop on the Today tab, or tap New supplier.'),
   ];
 }
+function noteCard(v) {
+  const files = S.photos.filter(p => p.client_id === v.client_id);
+  const vn = files.filter(p => p.kind === 'voice').length;
+  const ph = files.length - vn;
+  const inDrive = files.length ? 0 : Number(v.photos || 0);   // a teammate's note: Drive counts photos and voice notes together
+  return h('button', { class: 'note-card', onclick: () => openForm({ visit: v }) },
+    h('div', { class: 'booth' }, v.supplier_name),
+    h('div', { class: 'meta' }, [v.booth && String(v.booth).split(',')[0], v.recorded_by, v.saved_at].filter(Boolean).join(' \u00b7 ')),
+    v.notes ? h('div', { class: 'note-text' }, v.notes) : null,
+    h('div', { class: 'tags' }, hotTag(v), statusTag(v.status), v.rating ? h('span', { class: 'tag' }, '\u2605'.repeat(Number(v.rating))) : null,
+      v.next_step ? h('span', { class: 'tag warn' }, 'Next: ' + String(v.next_step).slice(0, 40)) : null,
+      v.sample === 'requested' ? h('span', { class: 'tag warn' }, 'Sample requested') : null,
+      ph ? h('span', { class: 'tag' }, `${ph} photo${ph > 1 ? 's' : ''}`) : null,
+      vn ? h('span', { class: 'tag' }, `${vn} voice note${vn > 1 ? 's' : ''}`) : null,
+      inDrive ? h('span', { class: 'tag' }, `${inDrive} file${inDrive > 1 ? 's' : ''} in Drive`) : null,
+      !v.supplier_id ? h('span', { class: 'tag warn' }, 'New supplier') : null,
+      v.sync === 'synced' ? null : h('span', { class: 'tag ' + (v.sync === 'error' ? 'bad' : 'warn') }, v.sync === 'error' ? 'Upload problem' : 'Waiting to upload')));
+}
+const isHot = v => v.hot === '1' || v.hot === 1 || v.hot === true;
+const hotTag = v => isHot(v) ? h('span', { class: 'tag hot' }, svg(ICON.flame, 12), ' Hot lead') : null;
 function statusTag(s) {
   return s === 'revisit' ? h('span', { class: 'tag warn' }, 'Come back') : s === 'skipped' ? h('span', { class: 'tag bad' }, 'Skipped') : h('span', { class: 'tag ok' }, 'Visited');
+}
+
+// ---------- follow-ups: to do, end-of-day summary, all notes ----------
+function viewFollow() {
+  const view = S.followView || 'todo';
+  return [segNav('followView', [['todo', 'To do'], ['summary', 'Day summary'], ['notes', 'All notes']]),
+    view === 'summary' ? viewSummary() : view === 'notes' ? viewNotes() : viewTodo()];
+}
+function viewTodo() {
+  const groups = [['Come back to the booth', v => v.status === 'revisit'], ['Hot leads', isHot],
+    ['Samples requested', v => v.sample === 'requested'], ['Next steps', v => !!v.next_step]];
+  const placed = new Set();
+  const out = groups.map(([title, test]) => {
+    const list = allVisits().filter(v => !placed.has(v.client_id) && test(v));
+    list.forEach(v => placed.add(v.client_id));
+    return list.length ? [h('div', { class: 'eyebrow' }, `${title} (${list.length})`), list.map(noteCard)] : null;
+  }).filter(Boolean);
+  return out.length ? out : h('div', { class: 'empty' }, 'Nothing to follow up yet. Mark a booth as Come back, Hot lead, Sample requested, or add a Next step - it shows up here.');
+}
+function viewSummary() {
+  const days = S.data.days || [];
+  if (S.sumDay == null) S.sumDay = Math.max(0, fairDay().i);
+  const d = days[S.sumDay];
+  if (!d) return h('div', { class: 'empty' }, 'No itinerary loaded yet.');
+  const scope = S.sumScope || 'mine';
+  const vs = allVisits().filter(v => String(v.saved_at || '').startsWith(d.date) && (scope === 'all' || !v.team));
+  const seen = seenIds();
+  const done = d.stops.filter(s => seen.has(String(s.id))).length;
+  const missed = d.stops.filter(s => s.must_see && !seen.has(String(s.id)));
+  const pick = test => vs.filter(test);
+  const b = x => String(x.booth || '').split(',')[0].trim();
+  const sections = [
+    ['Hot leads', pick(isHot), v => `${v.supplier_name}${b(v) ? ` (${b(v)})` : ''}${v.contact_name ? ' - ' + v.contact_name : ''}`],
+    ['Missed must-sees', missed, s => `${s.name_en} (${b(s)})`],
+    ['Come back', pick(v => v.status === 'revisit'), v => `${v.supplier_name}${b(v) ? ` (${b(v)})` : ''}`],
+    ['Samples requested', pick(v => v.sample === 'requested'), v => v.supplier_name],
+    ['Next steps', pick(v => v.next_step), v => `${v.supplier_name}: ${v.next_step}`],
+    ['New suppliers', pick(v => !v.supplier_id), v => `${v.supplier_name}${b(v) ? ` (${b(v)})` : ''}`],
+  ].filter(x => x[1].length);
+  const text = [`Canton Fair - ${d.label} (${d.display_date})${scope === 'mine' ? ' - ' + S.who : ' - team'}`,
+    `Visited ${done} of ${d.count} planned stops - ${vs.length} booth note${vs.length === 1 ? '' : 's'} saved`,
+    ...sections.flatMap(([t, list, fmt]) => ['', `${t} (${list.length}):`, ...list.map(x => '- ' + fmt(x))])].join('\n');
+  return [
+    h('div', { class: 'days' }, days.map((x, i) => h('button', { class: 'day' + (i === S.sumDay ? ' on' : ''), onclick: () => { S.sumDay = i; render(); } },
+      h('b', {}, x.label.replace('Phase ', 'P').replace(' \u00b7 Day ', ' \u00b7 D')), h('span', {}, x.display_date.slice(0, 10))))),
+    h('div', { class: 'seg' }, [['mine', 'Just me'], ['all', 'Both of us']].map(([k, l]) => h('button', { class: scope === k ? 'on' : '', onclick: () => { S.sumScope = k; render(); } }, l))),
+    h('div', { class: 'card' }, h('div', { class: 'summary' },
+      h('div', { class: 'kpi' }, h('b', {}, `${done}/${d.count}`), h('span', {}, 'planned stops')),
+      h('div', { class: 'kpi' }, h('b', {}, String(vs.length)), h('span', {}, 'notes saved')),
+      h('div', { class: 'kpi' }, h('b', {}, String(pick(isHot).length)), h('span', {}, 'hot leads')))),
+    sections.length ? sections.map(([t, list, fmt]) => h('div', { class: 'card sum-sec' }, h('div', { class: 'section-title' }, `${t} (${list.length})`),
+      h('ul', {}, list.map(x => h('li', {}, fmt(x)))))) : h('div', { class: 'empty' }, 'No notes saved on this day yet.'),
+    h('div', { class: 'btn-row' },
+      h('button', { class: 'btn', onclick: () => shareText('Canton Fair day summary', text) }, svg(ICON.share, 18), 'Share summary'),
+      h('button', { class: 'btn ghost', onclick: () => copyText(text, 'Summary copied') }, svg(ICON.copy, 18), 'Copy')),
+  ];
+}
+
+// ---------- contacts: everyone we met, one tap to call, email, copy WeChat or save to the phone ----------
+const splitMulti = s => String(s || '').split(/\s*[|,;\/]\s*/).map(x => x.trim()).filter(Boolean);
+const contactsOf = () => allVisits().filter(v => v.contact_name || v.wechat || v.phone || v.email)
+  .sort((a, b) => (isHot(b) - isHot(a)) || String(b.updated_local || b.saved_at).localeCompare(String(a.updated_local || a.saved_at)));
+function viewContacts() {
+  const all = contactsOf();
+  const input = h('input', { class: 'i', type: 'search', placeholder: 'Name, company, WeChat, phone\u2026', value: S.cq || '', autocomplete: 'off',
+    oninput: e => { S.cq = e.target.value; const old = $('#clist'); if (old) old.replaceWith(contactList()); } });
+  return [
+    h('div', { class: 'search', style: 'margin-top:4px' }, svg(ICON.search, 18), input),
+    h('div', { class: 'seg', style: 'margin-top:10px' }, [['all', 'All'], ['hot', 'Hot leads'], ['mine', 'Mine']].map(([k, l]) =>
+      h('button', { class: (S.cf || 'all') === k ? 'on' : '', onclick: () => { S.cf = k; render(); } }, l))),
+    contactList(),
+    all.length ? h('div', { class: 'card' }, h('div', { class: 'section-title' }, 'Export all contacts'),
+      h('div', { class: 'hint' }, 'Works offline. Share to Contacts, email, Files or AirDrop.'),
+      h('div', { class: 'btn-row' },
+        h('button', { class: 'btn ghost', onclick: () => shareFile(`canton-contacts-${stamp().slice(0, 10)}.vcf`, vcard(all), 'text/vcard') }, svg(ICON.user, 18), 'Phone contacts'),
+        h('button', { class: 'btn ghost', onclick: () => shareFile(`canton-contacts-${stamp().slice(0, 10)}.csv`, contactsCsv(all), 'text/csv') }, svg(ICON.download, 18), 'Spreadsheet (CSV)'))) : null,
+  ];
+}
+function contactList() {
+  const words = String(S.cq || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const list = contactsOf().filter(v => (S.cf === 'hot' ? isHot(v) : S.cf === 'mine' ? !v.team : true) &&
+    words.every(w => [v.contact_name, v.supplier_name, v.wechat, v.phone, v.email, v.booth].join(' ').toLowerCase().includes(w)));
+  return h('div', { id: 'clist' }, list.length ? list.map(contactCard)
+    : h('div', { class: 'empty' }, contactsOf().length ? 'No match.' : 'No contacts yet. Scan a supplier\'s QR code or fill in Contact on a booth note - they appear here.'));
+}
+function contactCard(v) {
+  const phones = splitMulti(v.phone), emails = splitMulti(v.email).filter(e => /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(e));
+  const wechat = String(v.wechat || '').split('|')[0].trim();
+  const qr = S.photos.find(p => p.client_id === v.client_id && /^qr_code_/.test(p.name || ''));
+  const line = (label, val) => val ? h('div', { class: 'kv' }, h('span', {}, label), h('span', { class: 'sel' }, val)) : null;
+  return h('div', { class: 'card contact' },
+    h('button', { class: 'contact-head', onclick: () => openForm({ visit: v }) },
+      h('div', { class: 'booth' }, v.contact_name || v.supplier_name),
+      v.contact_name ? h('div', { class: 'meta' }, v.supplier_name) : null,
+      h('div', { class: 'meta' }, [String(v.booth || '').split(',')[0], v.recorded_by].filter(Boolean).join(' \u00b7 ')),
+      h('div', { class: 'tags' }, hotTag(v), v.rating ? h('span', { class: 'tag' }, '\u2605'.repeat(Number(v.rating))) : null)),
+    line('WeChat', wechat), line('Phone', phones.join(', ')), line('Email', emails.join(', ')),
+    h('div', { class: 'actions' },
+      phones[0] ? h('a', { class: 'act', href: 'tel:' + phones[0].replace(/[^\d+]/g, '') }, svg(ICON.phone, 18), 'Call') : null,
+      emails[0] ? h('a', { class: 'act', href: 'mailto:' + emails[0] }, svg(ICON.mail, 18), 'Email') : null,
+      wechat ? h('button', { class: 'act', onclick: () => copyText(wechat, 'WeChat copied - paste it in WeChat \u2192 Add contacts') }, svg(ICON.copy, 18), 'WeChat') : null,
+      qr ? h('button', { class: 'act', onclick: () => showPhoto(qr, 'WeChat / card QR code') }, svg(ICON.qr, 18), 'QR') : null,
+      h('button', { class: 'act', onclick: () => shareFile(`${(v.contact_name || v.supplier_name).replace(/[^\w\u4e00-\u9fff -]+/g, '').slice(0, 40) || 'contact'}.vcf`, vcard([v]), 'text/vcard') }, svg(ICON.user, 18), 'Save')));
+}
+function showPhoto(p, title) {
+  photoBlob(p).then(b => {
+    if (!b) return toast('The photo is not on this phone');
+    const url = URL.createObjectURL(b);
+    const ed = h('div', { class: 'editor' },
+      h('div', { class: 'row' }, h('b', {}, title), h('button', { class: 'btn', style: 'width:auto;padding:9px 16px', onclick: () => { URL.revokeObjectURL(url); ed.remove(); } }, 'Close')),
+      h('div', { style: 'flex:1;overflow:auto;display:grid;place-items:center;padding-top:10px' }, h('img', { src: url, alt: title, style: 'max-width:100%;max-height:100%;background:#fff;border-radius:10px' })),
+      h('p', { class: 'hint' }, 'In WeChat: + \u2192 Scan \u2192 photo icon, or show this screen to a colleague\'s WeChat scanner.'));
+    document.body.append(ed);
+  });
+}
+const vesc = s => String(s || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/([,;])/g, '\\$1');
+function vcard(list) {
+  return list.map(v => {
+    const name = v.contact_name || v.supplier_name;
+    const note = [v.wechat && 'WeChat: ' + v.wechat, v.booth && 'Canton Fair booth ' + v.booth, v.next_step && 'Next step: ' + v.next_step].filter(Boolean).join('\n');
+    return ['BEGIN:VCARD', 'VERSION:3.0', `N:${vesc(name)};;;;`, `FN:${vesc(name)}`, `ORG:${vesc(v.supplier_name)}`,
+      ...splitMulti(v.phone).map(p => `TEL;TYPE=WORK,VOICE:${vesc(p)}`), ...splitMulti(v.email).map(e => `EMAIL;TYPE=INTERNET:${vesc(e)}`),
+      note ? `NOTE:${vesc(note)}` : '', 'END:VCARD'].filter(Boolean).join('\r\n');
+  }).join('\r\n') + '\r\n';
+}
+// a leading apostrophe stops spreadsheet apps running a cell as a formula
+const csvCell = x => { let s = String(x == null ? '' : x); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
+function contactsCsv(list) {
+  const cols = [['Supplier', 'supplier_name'], ['Booth', 'booth'], ['Phase', 'phase'], ['Contact', 'contact_name'], ['WeChat', 'wechat'], ['Phone', 'phone'],
+    ['Email', 'email'], ['Rating', 'rating'], ['Hot lead', v => isHot(v) ? 'yes' : ''], ['Outcome', 'status'], ['Products', 'products'], ['FOB price', 'fob_price'],
+    ['MOQ', 'moq'], ['Next step', 'next_step'], ['Sample', 'sample'], ['Recorded by', 'recorded_by'], ['Saved at', 'saved_at']];
+  const rows = [cols.map(c => csvCell(c[0])).join(','), ...list.map(v => cols.map(([, k]) => csvCell(typeof k === 'function' ? k(v) : v[k])).join(','))];
+  return '\ufeff' + rows.join('\r\n') + '\r\n';
+}
+async function shareFile(name, text, type) {
+  const file = new File([text], name, { type });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  const url = URL.createObjectURL(file);
+  const a = h('a', { href: url, download: name });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  toast(`${name} saved`);
+}
+async function shareText(title, text) {
+  try { if (navigator.share) { await navigator.share({ title, text }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  copyText(text, 'Copied - paste it into WeChat, WhatsApp or email');
+}
+async function copyText(text, msg) {
+  try { await navigator.clipboard.writeText(text); toast(msg || 'Copied'); return; } catch (e) { /* older phones: fall back below */ }
+  const ta = h('textarea', { style: 'position:fixed;top:0;opacity:0', readonly: '' });
+  ta.value = text; document.body.append(ta); ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove();
+  toast(ok ? (msg || 'Copied') : 'Could not copy - press and hold the text to copy it');
+}
+
+// ---------- USD <-> RMB converter (fixed rate set in Settings, works offline) ----------
+const usdRate = () => Number(store.get('rate')) || 7.2;
+function converter(onUse) {
+  const num = s => parseFloat(String(s).replace(/[^\d.]/g, ''));
+  const fmt = n => String(Math.round(n * 100) / 100);
+  const rmb = h('input', { class: 'i', inputmode: 'decimal', placeholder: 'RMB \u00a5', 'aria-label': 'RMB',
+    oninput: () => { const n = num(rmb.value); usd.value = isFinite(n) ? fmt(n / usdRate()) : ''; } });
+  const usd = h('input', { class: 'i', inputmode: 'decimal', placeholder: 'USD $', 'aria-label': 'USD',
+    oninput: () => { const n = num(usd.value); rmb.value = isFinite(n) ? fmt(n * usdRate()) : ''; } });
+  return h('div', { class: 'conv' },
+    h('div', { class: 'conv-row' }, rmb, h('span', { class: 'eq' }, '='), usd),
+    h('div', { class: 'conv-foot' }, h('span', { class: 'hint', style: 'margin:0' }, `1 USD = ${usdRate()} RMB \u00b7 change in Settings`),
+      onUse ? h('button', { class: 'link', onclick: () => { if (usd.value) onUse(usd.value, rmb.value); else toast('Type a price first'); } }, 'Use as FOB price') : null));
 }
 
 // ---------- the booth form ----------
@@ -602,16 +881,9 @@ function renderForm() {
         h('div', { class: 'grid2' }, h('div', {}, field('Booth', 'new_booth', { placeholder: 'e.g. 12.2A19' })),
           h('div', {}, h('label', { class: 'f' }, 'Phase'), seg('phase_new', [['2', 'Phase 2'], ['3', 'Phase 3']], f.phase, x => { f.phase = x; setVal('phase', x); }))),
         field('Category / products', 'new_category')),
-      questionsCard(),
-      h('div', { class: 'card' },
-        h('div', { class: 'section-title' }, 'Outcome'),
-        seg('status', [['visited', 'Visited'], ['revisit', 'Come back'], ['skipped', 'Skipped']], v.status, x => setVal('status', x), 'status'),
-        h('label', { class: 'f' }, 'Rating'),
-        h('div', { class: 'stars', id: 'stars' }, [1, 2, 3, 4, 5].map(n => h('button', { class: Number(v.rating) >= n ? 'on' : '', 'aria-label': `${n} stars`,
-          onclick: () => { setVal('rating', Number(v.rating) === n ? '' : String(n)); renderForm(); } }, '\u2605')))),
+      captureCard(f),
       h('div', { class: 'card' },
         h('div', { class: 'section-title' }, 'Contact'),
-        h('button', { class: 'btn ghost qr-btn', onclick: openScanner }, svg(ICON.qr, 20), 'Scan QR code (WeChat / business card)'),
         field('Who we met', 'contact_name', { placeholder: 'Name and role' }),
         h('div', { class: 'grid2' }, h('div', {}, field('WeChat', 'wechat')), h('div', {}, field('Phone', 'phone', { type: 'tel', inputmode: 'tel' }))),
         field('Email', 'email', { type: 'email', inputmode: 'email', autocapitalize: 'off' })),
@@ -619,20 +891,16 @@ function renderForm() {
         h('div', { class: 'section-title' }, 'Discussion', h('button', { class: 'link', onclick: openEditor }, svg(ICON.expand, 16), ' Full screen')),
         field('Products discussed', 'products'),
         h('label', { class: 'f', for: 'f_notes' }, 'Notes'), notes,
-        h('div', { class: 'hint' }, 'Tip: the microphone on your keyboard types what you say. A voice note keeps the recording itself.'),
-        voiceSection(f)),
+        h('div', { class: 'hint' }, 'Tip: the microphone on your keyboard types what you say. A voice note keeps the recording itself.')),
       h('div', { class: 'card' },
         h('div', { class: 'section-title' }, 'Commercials'),
         h('div', { class: 'grid3' }, h('div', {}, field('FOB price', 'fob_price', { placeholder: 'USD' })), h('div', {}, field('MOQ', 'moq')), h('div', {}, field('Lead time', 'lead_time'))),
+        h('label', { class: 'f' }, 'Price converter'),
+        converter((usd, rmb) => { setVal('fob_price', `USD ${usd} (RMB ${rmb})`); renderForm(); toast('FOB price filled'); }),
         h('label', { class: 'f' }, 'Samples'),
         seg('sample', [['none', 'None'], ['requested', 'Requested'], ['received', 'Received']], v.sample, x => setVal('sample', x)),
         field('Next step', 'next_step', { placeholder: 'e.g. Send quote by 30 Oct' })),
-      h('div', { class: 'card' },
-        h('div', { class: 'section-title' }, 'Photos', h('span', { class: 'hint' }, S.quality === 'original' ? 'Original quality' : 'Optimized for roaming')),
-        h('div', { class: 'photo-actions' },
-          photoPicker('card', 'Business card', ICON.card), photoPicker('product', 'Products', ICON.box), photoPicker('booth', 'Booth / other', ICON.camera)),
-        h('div', { class: 'thumbs', id: 'thumbs' }, f.photos.filter(p => p.kind !== 'voice').map(thumb)),
-        h('div', { class: 'hint' }, 'Any photo format: JPG, HEIC, PNG, WebP, GIF, TIFF, RAW (DNG).')),
+      questionsCard(),
       team.length ? h('div', { class: 'card' }, h('div', { class: 'section-title' }, 'Team notes'),
         team.map(t => h('div', { class: 'team-note' }, h('b', {}, `${t.recorded_by || 'Teammate'} \u00b7 ${t.saved_at || ''}`), '\n', t.notes || '(no notes)'))) : null,
       deleteBtn(f)),
@@ -653,9 +921,34 @@ function seg(name, opts, cur, onPick, cls) {
 function questionsCard() {
   const qs = (S.data.questions || {}).screen || [];
   if (!qs.length) return null;
-  return h('details', { class: 'card qref', open: true },
+  return h('details', { class: 'card qref' },
     h('summary', {}, 'Booth questions ', h('span', { class: 'hint' }, '10-minute screen')),
     h('ol', {}, qs.map(q => h('li', {}, q))));
+}
+
+// ---------- 30-second capture: everything you do at a booth in one card ----------
+function captureCard(f) {
+  const v = f.values;
+  const clips = f.photos.filter(p => p.kind === 'voice'), pics = f.photos.filter(p => p.kind !== 'voice');
+  return h('div', { class: 'card capture' },
+    h('div', { class: 'section-title' }, 'Capture', h('span', { class: 'hint', style: 'margin:0' }, S.quality === 'original' ? 'Original photos' : 'Photos optimized for roaming')),
+    h('div', { class: 'tiles' },
+      h('button', { class: 'tile', onclick: openScanner }, svg(ICON.qr, 24), 'Scan QR'),
+      photoTile('card', 'Card photo', ICON.card),
+      photoTile('product', 'Product photo', ICON.box),
+      photoTile('booth', 'Booth photo', ICON.camera),
+      h('button', { class: 'tile rec-btn', onclick: openRecorder }, svg(ICON.mic, 24), 'Voice note'),
+      h('label', { class: 'tile', for: 'pick_voice' }, svg(ICON.audio, 24), 'Add recording',
+        h('input', { id: 'pick_voice', type: 'file', class: 'hidden', multiple: true,
+          accept: 'audio/*,.m4a,.mp3,.aac,.wav,.ogg,.opus,.webm,.amr,.3gp,.caf,.flac', onchange: addAudio }))),
+    pics.length ? h('div', { class: 'thumbs', id: 'thumbs' }, pics.map(thumb)) : null,
+    clips.length ? h('div', { class: 'clips' }, clips.map(clip)) : null,
+    h('div', { class: 'rate-row' },
+      h('div', { class: 'stars', id: 'stars' }, [1, 2, 3, 4, 5].map(n => h('button', { class: Number(v.rating) >= n ? 'on' : '', 'aria-label': `${n} stars`,
+        onclick: () => { setVal('rating', Number(v.rating) === n ? '' : String(n)); renderForm(); } }, '\u2605'))),
+      h('button', { class: 'hot-btn' + (isHot(v) ? ' on' : ''), 'aria-pressed': String(isHot(v)),
+        onclick: () => { setVal('hot', isHot(v) ? '' : '1'); renderForm(); } }, svg(ICON.flame, 18), 'Hot lead')),
+    seg('status', [['visited', 'Visited'], ['revisit', 'Come back'], ['skipped', 'Skipped']], v.status, x => setVal('status', x), 'status'));
 }
 
 function grow(t) {
@@ -663,9 +956,9 @@ function grow(t) {
   t.style.height = Math.min(Math.max(170, t.scrollHeight + 4), Math.round(window.innerHeight * 0.6)) + 'px';
 }
 
-function photoPicker(kind, label, icon) {
+function photoTile(kind, label, icon) {
   const id = 'pick_' + kind;
-  return h('label', { for: id }, svg(icon, 22), label,
+  return h('label', { class: 'tile', for: id }, svg(icon, 24), label,
     h('input', { id, type: 'file', class: 'hidden', multiple: true,
       accept: 'image/*,.heic,.heif,.HEIC,.HEIF,.dng,.DNG,.tif,.tiff,.avif,.webp', onchange: e => addPhotos(e.target, kind) }));
 }
@@ -732,17 +1025,6 @@ function prepareAudio(file) {
   if (!file.size) throw new Error(`${name} is empty`);
   if (file.size > MAX_FILE) throw new Error(`${name} is larger than 30 MB`);
   return { blob: file, mime, name, size: file.size, preview: false };
-}
-function voiceSection(f) {
-  const clips = f.photos.filter(p => p.kind === 'voice');
-  return [
-    h('div', { class: 'voice-actions' },
-      h('button', { class: 'btn ghost', onclick: openRecorder }, svg(ICON.mic, 20), 'Record voice note'),
-      h('label', { class: 'btn ghost', for: 'pick_voice' }, svg(ICON.audio, 20), 'Add recording',
-        h('input', { id: 'pick_voice', type: 'file', class: 'hidden', multiple: true,
-          accept: 'audio/*,.m4a,.mp3,.aac,.wav,.ogg,.opus,.webm,.amr,.3gp,.caf,.flac', onchange: addAudio }))),
-    clips.length ? h('div', { class: 'clips' }, clips.map(clip)) : null,
-  ];
 }
 async function addAudio(e) {
   const files = [...e.target.files];
@@ -1181,7 +1463,7 @@ async function saveForm(opts = {}) {
     recorded_by: (f.existing && f.existing.recorded_by) || S.who,
     supplier_id: sup ? sup.id : '', supplier_name: name, on_list: sup ? (sup.shortlist ? 'shortlist' : 'backup') : 'new',
     phase: f.phase || '', booth: sup ? (sup.booth || '') : String(v.new_booth || '').trim(), category: sup ? (sup.subcategory || sup.category || '') : String(v.new_category || '').trim(),
-    status: v.status || 'visited', rating: v.rating || '', sample: v.sample || 'none', sync: 'pending', error: '',
+    status: v.status || 'visited', rating: v.rating || '', sample: v.sample || 'none', hot: isHot(v) ? '1' : '', sync: 'pending', error: '',
   };
   for (const k of TEXT_FIELDS) if (!k.startsWith('new_')) rec[k] = String(v[k] || '').trim();
   await DB.put('visits', rec);
@@ -1256,6 +1538,11 @@ function openSettings() {
       h('div', { class: 'seg' }, [['optimized', 'Optimized'], ['original', 'Original']].map(([k, l]) =>
         h('button', { class: S.quality === k ? 'on' : '', onclick: e => { S.quality = k; store.set('quality', k); [...e.target.parentNode.children].forEach(b => b.classList.toggle('on', b === e.target)); } }, l))),
       h('div', { class: 'hint' }, 'Optimized: sharp 2560 px photos, ~5x less roaming data. Original: untouched files in any format.'),
+      h('label', { class: 'f' }, 'Price converter: 1 USD = ? RMB'),
+      h('input', { class: 'i', inputmode: 'decimal', value: String(usdRate()), onchange: e => {
+        const n = parseFloat(e.target.value);
+        if (n > 0 && n < 100) { store.set('rate', String(n)); toast('Rate saved'); } else { e.target.value = String(usdRate()); toast('Enter a rate like 7.2'); }
+      } }),
       h('div', { class: 'kv', style: 'margin-top:10px' }, h('span', {}, 'Itinerary data'), h('span', {}, S.data && S.data.generated || '-')),
       h('div', { class: 'kv' }, h('span', {}, 'App version'), h('span', {}, VERSION)),
       h('button', { class: 'btn', style: 'margin-top:12px', onclick: async () => {

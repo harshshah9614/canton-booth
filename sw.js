@@ -1,7 +1,7 @@
 // Offline-first service worker.
 // - App shell + public assets (styles, libraries, official hall maps): cached on install, refreshed in the background.
 // - Dashboard tabs (d/*.html): private; the app downloads them from Google Drive after sign-in into the DASH cache.
-const CACHE = 'canton-booth-v2.3.0';
+const CACHE = 'canton-booth-v2.4.0';
 const DASH = 'canton-dash';
 const SHELL = ['./', './index.html', './app.js', './config.js', './manifest.webmanifest', './assets.json', './jsqr.js',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
@@ -35,7 +35,7 @@ self.addEventListener('activate', e => {
 const MISSING = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Not downloaded</title>
 <body style="font:16px -apple-system,Segoe UI,Roboto,sans-serif;padding:32px 22px;color:#0f172a;background:#f4f6fb">
 <h2>This dashboard page is not on the phone yet</h2>
-<p>Open the booth app, connect to the internet once (Wi-Fi, roaming or VPN), then tap <b>Dashboard &rarr; Download dashboard</b>.</p>
+<p>Open the booth app, connect to the internet once (Wi-Fi, roaming or VPN), then tap <b>Guide &rarr; Download guide pages</b>.</p>
 <p><a href="../index.html" style="color:#4338ca;font-weight:700">&larr; Back to the booth app</a></p></body>`;
 
 self.addEventListener('fetch', e => {
